@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Pin Keeper",
+    "slug": "pin-keeper",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "pinkeeper",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "name": "Pin Keeper",
+      "description": "A private home for your pin collection."
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a photo for a pin in your private collection.",
+          "cameraPermission": "Take a photo of a pin for your private collection.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store",
+      "expo-font",
+      "expo-image"
+    ]
+  }
+}

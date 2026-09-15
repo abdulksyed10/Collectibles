@@ -1,0 +1,12 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.114.0",
+    "postgres": "npm:postgres@3.4.7",
+    "jpeg-js": "npm:jpeg-js@0.4.4",
+    "aws4fetch": "npm:aws4fetch@1.0.20"
+  },
+  "compilerOptions": { "strict": true },
+  "tasks": {
+    "check": "deno check index.ts ../../scripts/cleanup-media.ts"
+  }
+}
