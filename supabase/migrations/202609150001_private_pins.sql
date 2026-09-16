@@ -61,6 +61,28 @@ create index pin_images_owner on public.pin_images(owner_id);
 create index media_inventory_owner on private.media_inventory(owner_id);
 create index media_inventory_cleanup on private.media_inventory(deleted_at, last_swept_at);
 
+create function private.lock_metadata_statement() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  actor uuid := auth.uid();
+  account_deleting boolean;
+begin
+  if actor is null then return null; end if;
+  insert into private.owner_state(owner_id) values (actor) on conflict do nothing;
+  -- Take the account lock before UPDATE takes a pin/collection tuple lock.
+  -- Server deletes take account -> tuple locks in that same order, avoiding
+  -- deadlocks between client edits and storage deletion transactions.
+  select deleting into account_deleting from private.owner_state where owner_id=actor for update;
+  if account_deleting then raise exception 'account deletion is in progress' using errcode='23514'; end if;
+  return null;
+end;
+$$;
+revoke all on function private.lock_metadata_statement() from public, anon, authenticated;
+create trigger lock_collections_statement before insert or update on public.collections
+  for each statement execute function private.lock_metadata_statement();
+create trigger lock_pins_statement before insert or update on public.pins
+  for each statement execute function private.lock_metadata_statement();
+
 create function private.guard_metadata() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -92,7 +114,7 @@ begin
         where owner_id = target_owner and collections_count < 50;
       if not FOUND then raise exception 'collection limit reached (50)' using errcode = '23514'; end if;
     else
-      if exists(select 1 from private.media_inventory where pin_id = NEW.id and deleted_at is not null) then
+      if exists(select 1 from private.media_inventory where pin_id = NEW.id) then
         raise exception 'retired pin identity cannot be reused' using errcode = '23514';
       end if;
       update private.owner_state set pins_count = pins_count + 1

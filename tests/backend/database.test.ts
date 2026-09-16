@@ -91,6 +91,7 @@ test('account deletion state blocks new inserts and edits; removed pin IDs canno
   await asUser(b, async () => {
     await assert.rejects(db.query(`INSERT INTO collections(name) VALUES ('Too late')`), /account deletion/);
     await assert.rejects(db.query(`UPDATE collections SET name='Too late' WHERE id=$1`, [cb]), /account deletion/);
+    await assert.rejects(db.query(`UPDATE pins SET title='Too late' WHERE id=$1`, [pa]), /account deletion/);
   });
   await db.query(`INSERT INTO private.media_inventory(pin_id,owner_id,full_key,thumb_key,deleted_at) VALUES ($1,$2,'old/full','old/thumb',now())`, [pa,a]);
   await db.query(`DELETE FROM pins WHERE id=(SELECT id FROM pins WHERE owner_id=$1 LIMIT 1)`, [a]);

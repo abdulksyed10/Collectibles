@@ -1,7 +1,7 @@
 # Private pin collection MVP
 
 ## Approved direction
-The user approved building a small private collection app with Supabase, Cloudflare R2, future backend flexibility, and committing source to GitHub without secrets. React Native + Expo is the announced default while the framework question is pending.
+The user approved building a small private collection app with Supabase, Cloudflare R2, future backend flexibility, and committing source to GitHub without secrets. React Native + Expo was explicitly chosen. The latest instruction is frontend first, with placeholders and live backend integration deferred. The frontend includes an explicitly labelled, disposable demo with no API calls; backend source remains a draft for the next phase.
 
 ## Product
 Working title: Pin Keeper. Android/iOS app with a web development preview. Email/password sign-in and sign-up, private named collections, pin title/notes, one photo per pin (with thumbnail), collection filtering and text search, paginated lists, edit and deletion, sign-out. Clear loading, empty, error and unconfigured states. No demo data presented as real saved data. Public discovery/sharing and social features are outside this MVP. All users see only their own data.

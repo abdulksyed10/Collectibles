@@ -1,5 +1,7 @@
 # Private backend
 
+**Deferred integration scaffold.** The current delivery is frontend-first. Do not deploy this draft until the media retry race and live acceptance checks in [the integration plan](INTEGRATION-PLAN.md) are resolved. No hosted tables, bucket or function have been provisioned by this work.
+
 This backend requires a user-owned Supabase project and a **private** Cloudflare R2 bucket. Source and local tests do not provision or verify either service.
 
 ## Deploy
@@ -27,7 +29,7 @@ POST `/functions/v1/media` with `Authorization: Bearer <user access token>` and 
 | `{ "action":"delete-collection", "collectionId":"<uuid>" }` | `{ "ok":true }` |
 | `{ "action":"delete-account" }` | `{ "ok":true }` |
 
-Requests cannot provide object keys or owner IDs. Read accepts at most 100 IDs; missing, foreign and photo-less pins are omitted. Signed URLs expire after 300 seconds and are bearer capabilities during that time. Never log or persist them. Upload accepts raw base64 (no data URL prefix), one JPEG up to 2 MiB and one JPEG thumbnail up to 200 KiB; decoded pixel dimensions are bounded as well. Images are decoded for format validation. Metadata/exif stripping is the client's image export responsibility.
+Requests cannot provide object keys or owner IDs. Read accepts at most 100 IDs; missing, foreign and photo-less pins are omitted. Signed URLs expire after 300 seconds and are bearer capabilities during that time. Never log or persist them. Upload accepts raw base64 (no data URL prefix), one JPEG up to 2 MiB and one JPEG thumbnail up to 200 KiB. Full images are limited to 4096 pixels per side and 6 megapixels; thumbnails to 512 pixels per side and 0.3 megapixels. The decoder has an additional 64 MiB memory ceiling. Images are decoded for format validation. Metadata/exif stripping is the client's image export responsibility.
 
 Failures are JSON `{ "error":"<safe message>", "code":"<stable code>" }`. Typical statuses: 400 invalid input, 401 invalid session, 403 blocked Origin, 404 missing owned target, 409 photo already exists/account deletion in progress, 413 oversized body/image, 415 non-JSON, 503 storage/database failure. Retry a failed deletion. A photo cannot be replaced: delete the pin and add it again. A failed upload without a committed `pin_images` row can be retried. A lost successful upload response can produce 409 on retry; refresh the pin to confirm its photo.
 
@@ -35,7 +37,7 @@ Failures are JSON `{ "error":"<safe message>", "code":"<stable code>" }`. Typica
 
 Client `collections` and `pins` inserts default `owner_id` to `auth.uid()`. Clients can read their own collections, pins and image metadata, edit permitted text/parent columns, and insert their own metadata. Anonymous users have no table privileges. RLS and composite foreign keys reject foreign parents and ownership reassignment. Only the server can write image rows or delete collections/pins.
 
-Each user has a private counter/lock row. Database triggers atomically enforce **50 collections and 500 pins**, including direct REST inserts and concurrent requests. Inserts and edits lock that same row; server media operations hold it across storage work. Reassigning a pin to an owned collection therefore cannot race collection deletion. The server never trusts a supplied owner ID.
+Each user has a private counter/lock row. Database triggers atomically enforce **50 collections and 500 pins**, including direct REST inserts and concurrent requests. Client inserts and edits lock that row before acquiring metadata row locks; server media operations take locks in the same order and hold them across storage work. Reassigning a pin to an owned collection therefore cannot race collection deletion. The server never trusts a supplied owner ID.
 
 Upload reserves deterministic keys in a durable private inventory transaction **before** putting objects. It then holds the owner lock, rechecks ownership/photo absence, uploads both objects, and commits image metadata. Two simultaneous uploads cannot both succeed. Failed puts retain the reservation, so retry/deletion can find partial objects. Deletion removes both fixed keys before deleting metadata; storage failures roll back metadata deletion. Missing owned delete targets return success so normal retries are idempotent. Account deletion first removes all owned media and freezes further writes, then calls Supabase Auth to delete that same user. If Auth fails, the account remains frozen and the delete-account action can be retried.
 

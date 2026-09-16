@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { repository } from '../data/repository';
+import { useRepository } from './RepositoryProvider';
 import type { Collection, Pin, PinImage } from '../domain/models';
 import { messageOf } from '../components/ui';
 export function useLibrary(collectionId: string | undefined, search: string) {
+  const repository = useRepository();
   const [collections, setCollections] = useState<Collection[]>([]); const [pins, setPins] = useState<Pin[]>([]); const [images, setImages] = useState<Record<string, PinImage>>({});
   const [total, setTotal] = useState(0); const [hasMore, setHasMore] = useState(false); const [loading, setLoading] = useState(true); const [moreLoading, setMoreLoading] = useState(false); const [error, setError] = useState(''); const [photoError, setPhotoError] = useState(''); const [revision, setRevision] = useState(0);
   const pageRef = useRef(0); const requestRef = useRef(0); const pinsRef = useRef<Pin[]>([]); const loadingMoreRef = useRef(false);
@@ -17,12 +18,12 @@ export function useLibrary(collectionId: string | undefined, search: string) {
       catch { if (request === requestRef.current) setPhotoError('Photos couldn’t load. Your pin details are still here.'); }
     }).catch(e => { if (request === requestRef.current) { setError(messageOf(e)); setLoading(false); } });
     return () => { requestRef.current++; };
-  }, [collectionId, search, revision]);
+  }, [collectionId, search, revision, repository]);
   const refreshPhotos = useCallback(async () => {
     const request = requestRef.current;
     try { const urls = await repository.readImages(pinsRef.current.map(pin => pin.id)); if (request === requestRef.current) { setImages(Object.fromEntries(urls.map(image => [image.pinId, image]))); setPhotoError(''); } }
     catch { if (request === requestRef.current) setPhotoError('Photos couldn’t refresh. Please try again.'); }
-  }, []);
+  }, [repository]);
   useEffect(() => {
     const timer = setInterval(() => { void refreshPhotos(); }, 4 * 60 * 1000);
     const listener = AppState.addEventListener('change', state => { if (state === 'active') void refreshPhotos(); });

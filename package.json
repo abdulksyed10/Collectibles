@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts tests/backend/*.test.ts",
     "check:secrets": "node scripts/check-secrets.mjs",
-    "build:web": "expo export --platform web"
+    "build:web": "expo export --platform web --clear",
+    "test:e2e": "playwright test",
+    "preview": "node scripts/serve-preview.mjs",
+    "setup:hooks": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",

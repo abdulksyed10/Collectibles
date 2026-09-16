@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import jpeg from 'jpeg-js';
 import { createMediaService,type Database,type Session } from '../../supabase/functions/media/service.ts';
+import { sweepMedia } from '../../supabase/functions/media/cleanup.ts';
 
 const a='10000000-0000-4000-8000-000000000001', b='10000000-0000-4000-8000-000000000002';
 const ca='10000000-0000-4000-8000-000000000011',cb='10000000-0000-4000-8000-000000000012';
@@ -16,6 +17,11 @@ const deletedUsers:string[]=[];
 const image=jpeg.encode({width:1,height:1,data:Buffer.from([200,50,0,255])},80).data.toString('base64');
 const upload={action:'upload' as const,pinId:pin,imageBase64:image,thumbnailBase64:image};
 let media:ReturnType<typeof createMediaService>;
+const store={
+  async put(key:string,bytes:Uint8Array){if(failPut && key.endsWith('thumb.jpg'))throw Error('storage unavailable'); objects.set(key,bytes);},
+  async remove(keys:string[]){if(failRemove)throw Error('storage unavailable'); keys.forEach(key=>objects.delete(key));},
+  async sign(key:string){return `https://private.example/${key}?expires=300`;},
+};
 before(async()=>{
   pg=new PGlite();
   await pg.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
@@ -27,11 +33,7 @@ before(async()=>{
   db={...session(pg),transaction:run=>pg.transaction(tx=>run(session(tx)))};
   await pg.query(`INSERT INTO collections(id,owner_id,name) VALUES ($1,$2,'A'),($3,$4,'B')`,[ca,a,cb,b]);
   await pg.query(`INSERT INTO pins(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'A pin')`,[pin,a,ca]);
-  media=createMediaService(db,{
-    async put(key,bytes){if(failPut && key.endsWith('thumb.jpg'))throw Error('storage unavailable'); objects.set(key,bytes);},
-    async remove(keys){if(failRemove)throw Error('storage unavailable'); keys.forEach(key=>objects.delete(key));},
-    async sign(key){return `https://private.example/${key}?expires=300`;},
-  },async owner=>{if(failAuth)throw Error('auth unavailable'); await pg.query('DELETE FROM auth.users WHERE id=$1',[owner]);deletedUsers.push(owner);});
+  media=createMediaService(db,store,async owner=>{if(failAuth)throw Error('auth unavailable'); await pg.query('DELETE FROM auth.users WHERE id=$1',[owner]);deletedUsers.push(owner);});
 });
 after(async()=>pg?.close());
 
@@ -83,4 +85,36 @@ test('account deletion freezes writes before Auth; Auth failure allows an authen
   assert.deepEqual(await media.handle(b,{action:'delete-account'}),{ok:true});
   assert.deepEqual(deletedUsers,[b]);
   assert.equal((await pg.query('SELECT * FROM collections WHERE owner_id=$1',[b])).rows.length,0);
+});
+
+test('cleanup removes late orphan writes after settling, preserves active media and keeps retirement inventory',async()=>{
+  objects.set(`${a}/${pin}/full.jpg`,new Uint8Array([99]));
+  assert.equal(await sweepMedia(db,store),0);
+  assert.equal(objects.size,1);
+  await pg.query(`UPDATE private.media_inventory SET deleted_at=now()-interval '16 minutes' WHERE pin_id=$1`,[pin]);
+  assert.equal(await sweepMedia(db,store),1);
+  assert.equal(objects.size,0);
+  assert.equal((await pg.query('SELECT * FROM private.media_inventory')).rows.length,1);
+
+  const active='10000000-0000-4000-8000-000000000031';
+  await pg.query(`INSERT INTO collections(id,owner_id,name) VALUES ($1,$2,'New')`,[ca,a]);
+  await pg.query(`INSERT INTO pins(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'Active')`,[active,a,ca]);
+  await media.handle(a,{...upload,pinId:active});
+  await pg.query(`UPDATE private.media_inventory SET created_at=now()-interval '2 days' WHERE pin_id=$1`,[active]);
+  assert.equal(await sweepMedia(db,store),0);
+  assert.equal(objects.size,2);
+});
+
+test('concurrent duplicate requests commit one photo; a simultaneous delete leaves no reachable or untracked image',async()=>{
+  const duplicate='10000000-0000-4000-8000-000000000041';
+  const racing='10000000-0000-4000-8000-000000000042';
+  await pg.query(`INSERT INTO pins(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'Duplicate'),($4,$2,$3,'Racing')`,[duplicate,a,ca,racing]);
+  const duplicateResults=await Promise.allSettled([media.handle(a,{...upload,pinId:duplicate}),media.handle(a,{...upload,pinId:duplicate})]);
+  assert.equal(duplicateResults.filter(result=>result.status==='fulfilled').length,1);
+  assert.equal((await pg.query('SELECT * FROM pin_images WHERE pin_id=$1',[duplicate])).rows.length,1);
+  const raceResults=await Promise.allSettled([media.handle(a,{...upload,pinId:racing}),media.handle(a,{action:'delete-pin',pinId:racing})]);
+  assert.equal(raceResults[1].status,'fulfilled');
+  assert.equal((await pg.query('SELECT * FROM pins WHERE id=$1',[racing])).rows.length,0);
+  assert.equal([...objects.keys()].some(key=>key.includes(racing)),false);
+  assert.ok((await pg.query('SELECT deleted_at FROM private.media_inventory WHERE pin_id=$1',[racing])).rows[0].deleted_at);
 });

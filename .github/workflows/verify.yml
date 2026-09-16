@@ -1,0 +1,52 @@
+name: Verify app
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_ENABLE_BACKEND: 'true'
+      PLAYWRIGHT_BACKEND_FIXTURE: 'true'
+      EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fixture_not_a_secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.1'
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-secrets.mjs --all
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx expo install --check
+      - run: npm run build:web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Build frontend without credentials
+        run: npm run build:web
+        env:
+          EXPO_PUBLIC_ENABLE_BACKEND: 'false'
+          EXPO_PUBLIC_SUPABASE_URL: ''
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
+      - name: Verify isolated demo
+        run: npm run test:e2e -- --grep demo
+        env:
+          PLAYWRIGHT_BACKEND_FIXTURE: 'false'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure
+          path: test-results/
+          retention-days: 7
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task --config supabase/functions/media/deno.json check

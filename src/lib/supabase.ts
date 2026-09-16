@@ -5,6 +5,9 @@ import { createClient, processLock } from '@supabase/supabase-js';
 import { readClientConfig } from '../domain/validation';
 
 export const clientConfig = readClientConfig(process.env.EXPO_PUBLIC_SUPABASE_URL, process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+// Backend integration is an explicit opt-in after tables, policies and media are deployed.
+export const backendEnabled = process.env.EXPO_PUBLIC_ENABLE_BACKEND === 'true';
+export const serviceReady = backendEnabled && clientConfig.ready;
 // Native sessions stay in Keychain/Keystore. Chunking accommodates larger sessions.
 const secureStorage = {
   async getItem(key: string) {
@@ -29,7 +32,7 @@ const secureStorage = {
     for (let i = 0; i < count; i++) await SecureStore.deleteItemAsync(`${key}.${i}`);
   },
 };
-export const supabase = clientConfig.ready ? createClient(clientConfig.url, clientConfig.key, {
+export const supabase = backendEnabled && clientConfig.ready ? createClient(clientConfig.url, clientConfig.key, {
   auth: { storage: secureStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: Platform.OS === 'web', lock: processLock },
 }) : null;
 export function requireClient() {
