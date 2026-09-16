@@ -2,10 +2,10 @@ import { MediaError,URL_TTL_SECONDS,validateJpegBase64,type Action } from './val
 export interface Session { query<T extends Record<string,unknown> = Record<string,unknown>>(sql:string,params?:unknown[]):Promise<T[]> }
 export interface Database extends Session { transaction<T>(run:(tx:Session)=>Promise<T>):Promise<T> }
 export interface ObjectStore { put(key:string,bytes:Uint8Array):Promise<void>; remove(keys:string[]):Promise<void>; sign(key:string):Promise<string> }
-type Inventory = {pin_id:string;owner_id:string;full_key:string;thumb_key:string;deleted_at:string|null} & Record<string,unknown>;
+type Inventory = {attempt_id:string;pin_id:string;owner_id:string;full_key:string;thumb_key:string;deleted_at:string|null} & Record<string,unknown>;
 
-export function imageKeys(owner:string,pin:string) {
-  return {full:`${owner}/${pin}/full.jpg`,thumb:`${owner}/${pin}/thumb.jpg`};
+export function imageKeys(owner:string,pin:string,attempt:string) {
+  return {full:`${owner}/${pin}/${attempt}/full.jpg`,thumb:`${owner}/${pin}/${attempt}/thumb.jpg`};
 }
 
 export async function lockOwner(tx:Session,owner:string,allowDeleting=false) {
@@ -27,25 +27,29 @@ export function createMediaService(db:Database,store:ObjectStore,deleteUser:(own
     });
     const full=validateJpegBase64(action.imageBase64,false);
     const thumb=validateJpegBase64(action.thumbnailBase64,true);
-    const keys=imageKeys(owner,action.pinId);
+    // Never reuse a previous request's object keys. Aborting a PUT locally does
+    // not guarantee that R2 stopped it; a late completion may touch only this
+    // attempt, never a later committed retry.
+    const attemptId=crypto.randomUUID();
+    const keys=imageKeys(owner,action.pinId,attemptId);
     // Commit inventory separately so a process crash cannot roll back our only
     // record of an R2 PUT. No object write occurs before this transaction commits.
     await db.transaction(async tx=>{
       await lockOwner(tx,owner);
       const [pin]=await tx.query('SELECT id FROM public.pins WHERE id=$1 AND owner_id=$2',[action.pinId,owner]);
       if(!pin) throw new MediaError(404,'not_found','Pin not found.');
-      await tx.query('INSERT INTO private.media_inventory(pin_id,owner_id,full_key,thumb_key) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',[action.pinId,owner,keys.full,keys.thumb]);
+      await tx.query('INSERT INTO private.media_inventory(attempt_id,pin_id,owner_id,full_key,thumb_key) VALUES ($1,$2,$3,$4,$5)',[attemptId,action.pinId,owner,keys.full,keys.thumb]);
     });
     await db.transaction(async tx=>{
       await lockOwner(tx,owner);
       const [pin]=await tx.query('SELECT id FROM public.pins WHERE id=$1 AND owner_id=$2',[action.pinId,owner]);
       if(!pin) throw new MediaError(404,'not_found','Pin not found.');
-      const [inventory]=await tx.query<Inventory>('SELECT * FROM private.media_inventory WHERE pin_id=$1 AND owner_id=$2 AND deleted_at IS NULL',[action.pinId,owner]);
+      const [inventory]=await tx.query<Inventory>('SELECT * FROM private.media_inventory WHERE attempt_id=$1 AND pin_id=$2 AND owner_id=$3 AND deleted_at IS NULL',[attemptId,action.pinId,owner]);
       if(!inventory) throw new MediaError(409,'retired_pin','This pin cannot accept a photo.');
       const [photo]=await tx.query('SELECT id FROM public.pin_images WHERE pin_id=$1',[action.pinId]);
       if(photo) throw new MediaError(409,'photo_exists','This pin already has a photo.');
-      // Sequential puts keep all I/O settled before the transaction releases its
-      // lock. Failures keep inventory, and retries overwrite only pending keys.
+      // Sequential requests stay under the owner lock. Any remotely delayed PUT
+      // after a failure remains tracked as an abandoned attempt for cleanup.
       await store.put(keys.full,full);
       await store.put(keys.thumb,thumb);
       await tx.query('INSERT INTO public.pin_images(pin_id,owner_id,full_key,thumb_key,bytes) VALUES ($1,$2,$3,$4,$5)',[action.pinId,owner,keys.full,keys.thumb,full.length+thumb.length]);
@@ -55,13 +59,15 @@ export function createMediaService(db:Database,store:ObjectStore,deleteUser:(own
 
   async function retire(tx:Session,owner:string,pinIds:string[]) {
     if(!pinIds.length)return;
-    // Include pins with no photo metadata: a failed upload may have put one key.
-    const keys=pinIds.flatMap(id=>{const key=imageKeys(owner,id);return[key.full,key.thumb];});
+    // Pins with no attempt still need a tombstone so their IDs cannot be reused.
+    // The original key layout is retained for these empty/legacy reservations.
     await tx.query(`INSERT INTO private.media_inventory(pin_id,owner_id,full_key,thumb_key,deleted_at)
-      SELECT id,owner_id,owner_id::text||'/'||id::text||'/full.jpg',owner_id::text||'/'||id::text||'/thumb.jpg',now()
-      FROM public.pins WHERE owner_id=$1 AND id=ANY($2::uuid[])
-      ON CONFLICT(pin_id) DO UPDATE SET deleted_at=coalesce(private.media_inventory.deleted_at,now())`,[owner,pinIds]);
-    await store.remove(keys);
+      SELECT p.id,p.owner_id,p.owner_id::text||'/'||p.id::text||'/full.jpg',p.owner_id::text||'/'||p.id::text||'/thumb.jpg',now()
+      FROM public.pins p WHERE p.owner_id=$1 AND p.id=ANY($2::uuid[])
+        AND NOT EXISTS(SELECT 1 FROM private.media_inventory i WHERE i.pin_id=p.id)`,[owner,pinIds]);
+    await tx.query('UPDATE private.media_inventory SET deleted_at=coalesce(deleted_at,now()) WHERE owner_id=$1 AND pin_id=ANY($2::uuid[])',[owner,pinIds]);
+    const inventory=await tx.query<Inventory>('SELECT * FROM private.media_inventory WHERE owner_id=$1 AND pin_id=ANY($2::uuid[])',[owner,pinIds]);
+    await store.remove(inventory.flatMap(row=>[row.full_key,row.thumb_key]));
   }
 
   return {async handle(owner:string,action:Action):Promise<unknown> {

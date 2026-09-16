@@ -1,7 +1,7 @@
 import { before,after,test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { applyMigrations } from './migrations.ts';
 import jpeg from 'jpeg-js';
 import { createMediaService,type Database,type Session } from '../../supabase/functions/media/service.ts';
 import { sweepMedia } from '../../supabase/functions/media/cleanup.ts';
@@ -28,7 +28,7 @@ before(async()=>{
     CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT null::uuid $$;
     INSERT INTO auth.users VALUES ('${a}'),('${b}');`);
-  await pg.exec(await readFile('supabase/migrations/202609150001_private_pins.sql','utf8'));
+  await applyMigrations(pg);
   const session=(client:{query:Function}):Session=>({query:async<T extends Record<string,unknown>>(sql:string,params:unknown[]=[]) => (await client.query(sql,params)).rows as T[]});
   db={...session(pg),transaction:run=>pg.transaction(tx=>run(session(tx)))};
   await pg.query(`INSERT INTO collections(id,owner_id,name) VALUES ($1,$2,'A'),($3,$4,'B')`,[ca,a,cb,b]);
@@ -53,7 +53,7 @@ test('partial upload keeps durable inventory, retry succeeds, and duplicate cann
   assert.equal(objects.size,1);
   failPut=false;
   assert.deepEqual(await media.handle(a,upload),{ok:true});
-  assert.equal(objects.size,2);
+  assert.equal(objects.size,3); // The first attempt's partial object remains inventoried until deletion/sweep.
   await assert.rejects(media.handle(a,upload),/already/);
   const result=await media.handle(a,{action:'read',pinIds:[pin]}) as {images:{pinId:string;url:string;expiresAt:string}[]};
   assert.equal(result.images.length,1);
@@ -88,13 +88,14 @@ test('account deletion freezes writes before Auth; Auth failure allows an authen
 });
 
 test('cleanup removes late orphan writes after settling, preserves active media and keeps retirement inventory',async()=>{
-  objects.set(`${a}/${pin}/full.jpg`,new Uint8Array([99]));
+  const [{full_key:retiredKey}]=await db.query<{full_key:string}>('SELECT full_key FROM private.media_inventory WHERE pin_id=$1 LIMIT 1',[pin]);
+  objects.set(retiredKey,new Uint8Array([99]));
   assert.equal(await sweepMedia(db,store),0);
   assert.equal(objects.size,1);
   await pg.query(`UPDATE private.media_inventory SET deleted_at=now()-interval '16 minutes' WHERE pin_id=$1`,[pin]);
-  assert.equal(await sweepMedia(db,store),1);
+  assert.equal(await sweepMedia(db,store),2);
   assert.equal(objects.size,0);
-  assert.equal((await pg.query('SELECT * FROM private.media_inventory')).rows.length,1);
+  assert.equal((await pg.query('SELECT * FROM private.media_inventory')).rows.length,2);
 
   const active='10000000-0000-4000-8000-000000000031';
   await pg.query(`INSERT INTO collections(id,owner_id,name) VALUES ($1,$2,'New')`,[ca,a]);

@@ -1,10 +1,10 @@
 # Backend integration plan
 
-## Current delivery: frontend first
+## Current delivery: backend integration
 
 The Expo frontend is usable through **Try the demo** with no credentials or services. A fresh repository in memory supplies sample pins on each visit. Edits and chosen photos reset when leaving/reloading; they are not uploaded. Account forms are present, but live access is disabled unless `EXPO_PUBLIC_ENABLE_BACKEND=true` and valid public configuration are supplied.
 
-Backend source was drafted before the frontend-first decision. It is retained for the next phase, not deployed or accepted for production. The Supabase tables and relations still need to be installed; the R2 bucket and media function still need configuration.
+The user has created the Supabase project and R2 bucket and authorized CLI deployment after local credentials are supplied. Backend source and tests are prepared. The Supabase tables and relations still need installation; the media function and bucket settings need deployment/verification.
 
 ## Data model
 
@@ -32,10 +32,10 @@ Named collections serve as the first category system. Future collection types (p
 
 ## Next phase, in order
 
-1. **Resolve the media retry race before deployment.** Current draft retries use deterministic object keys. A timed-out upload could complete late and overwrite a later successful retry. Use inventoried keys per upload attempt, commit only the winning attempt, and clean up abandoned attempts. Add a test where the first PUT completes after the retry commits. Existing cleanup tests do not cover this active-image case.
+1. **Done locally: media retry race fixed.** A follow-up migration gives each inventoried upload attempt its own UUID and keys. The regression test completes a timed-out PUT after the retry commits and verifies that the winning image remains unchanged. Cleanup removes abandoned attempts while preserving active keys. Deploy both migrations in order, then the updated function/cleanup code.
 2. Review the migration against the chosen project's existing schema, then apply it without resetting other data. Generate client database types from the resulting schema.
 3. Configure email confirmation, the recovery-code email template, redirect URLs, SMTP, and invite-only signup settings for the first testers.
-4. Create the private R2 bucket and a bucket-scoped object read/write token. Configure server secrets, browser CORS and the media function. Schedule the cleanup script.
+4. Configure the existing private R2 bucket and its bucket-scoped object read/write token. Configure server secrets, browser CORS and the media function. Schedule the cleanup script.
 5. Fill client-safe URL/key placeholders, then explicitly enable the backend. Replace the demo session with real Auth through the already-separated repository interface.
 6. Test with two real accounts: collection and photo isolation, forged parent IDs, expired/revoked sessions, photo upload/read/expiry, failed-upload retries, deletion, account deletion and cleanup. Use a real multi-connection PostgreSQL runtime to check concurrency.
 7. Test camera/library permissions, background/foreground sessions, keyboard/modal layouts and photo memory on Android and iOS devices. Produce development builds before store builds.
@@ -51,4 +51,4 @@ Named collections serve as the first category system. Future collection types (p
 
 The publishable key is designed for clients. Service-role keys, database credentials, R2 keys and deployment tokens must never be in `EXPO_PUBLIC_*` or Git. Templates contain placeholders; existing ignored local values are preserved.
 
-See [backend reference](BACKEND.md) for the drafted API/deployment details. Service integration, native release testing and store publication are intentionally pending.
+See [Connect services](CONNECT-SERVICES.md) for the operator steps and [backend reference](BACKEND.md) for API/deployment details. Live integration checks, native release testing and store publication remain pending.

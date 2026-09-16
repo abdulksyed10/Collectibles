@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
+import { applyMigrations } from './migrations.ts';
 
 const a = '00000000-0000-4000-8000-000000000001';
 const b = '00000000-0000-4000-8000-000000000002';
@@ -22,8 +22,7 @@ before(async () => {
     GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated;
     INSERT INTO auth.users VALUES ('${a}'), ('${b}');
   `);
-  const migration = await readFile('supabase/migrations/202609150001_private_pins.sql', 'utf8').catch(() => '');
-  await db.exec(migration);
+  await applyMigrations(db);
 });
 after(async () => db?.close());
 

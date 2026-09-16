@@ -1,12 +1,12 @@
 # Private backend
 
-**Deferred integration scaffold.** The current delivery is frontend-first. Do not deploy this draft until the media retry race and live acceptance checks in [the integration plan](INTEGRATION-PLAN.md) are resolved. No hosted tables, bucket or function have been provisioned by this work.
+**Integration in progress.** The frontend and backend source are prepared; the user has created Supabase and R2 resources. The upload-retry race is fixed and locally tested. Hosted migrations, function deployment and real-account verification must still be completed. Start with [Connect services](CONNECT-SERVICES.md).
 
 This backend requires a user-owned Supabase project and a **private** Cloudflare R2 bucket. Source and local tests do not provision or verify either service.
 
 ## Deploy
 
-1. Create a Supabase project. Apply `supabase/migrations/202609150001_private_pins.sql` through the SQL editor, or link the Supabase CLI and run `supabase db push`.
+1. Create a Supabase project. Link the Supabase CLI, review `supabase db push --dry-run`, then run `supabase db push`. Apply `202609150001_private_pins.sql` followed by `202609160001_media_attempts.sql`. When upgrading an existing deployment, pause media traffic until the migration, updated function and cleanup script are all in place.
 2. In Authentication, configure the production app/site redirect URLs and email delivery. Keep email confirmation enabled. For an invite beta, disable public signup and invite users through the dashboard. The checked-in local config permits signup; hosted dashboard settings must be configured separately.
 3. Create an R2 bucket. Disable its `r2.dev` URL and all public custom domains. Create an R2 API token with object read/write permission restricted to this bucket. Do not give these credentials to the app.
 4. Copy `supabase/.env.example` to ignored `supabase/.env.local` and fill in the server configuration. Set Edge Function secrets from that file: `supabase secrets set --env-file supabase/.env.local`. Never pass secrets in a committed command or paste them into a task.
@@ -39,11 +39,11 @@ Client `collections` and `pins` inserts default `owner_id` to `auth.uid()`. Clie
 
 Each user has a private counter/lock row. Database triggers atomically enforce **50 collections and 500 pins**, including direct REST inserts and concurrent requests. Client inserts and edits lock that row before acquiring metadata row locks; server media operations take locks in the same order and hold them across storage work. Reassigning a pin to an owned collection therefore cannot race collection deletion. The server never trusts a supplied owner ID.
 
-Upload reserves deterministic keys in a durable private inventory transaction **before** putting objects. It then holds the owner lock, rechecks ownership/photo absence, uploads both objects, and commits image metadata. Two simultaneous uploads cannot both succeed. Failed puts retain the reservation, so retry/deletion can find partial objects. Deletion removes both fixed keys before deleting metadata; storage failures roll back metadata deletion. Missing owned delete targets return success so normal retries are idempotent. Account deletion first removes all owned media and freezes further writes, then calls Supabase Auth to delete that same user. If Auth fails, the account remains frozen and the delete-account action can be retried.
+Each upload request reserves separate keys containing a new attempt UUID in a durable private inventory transaction **before** putting objects. A late completion of an earlier failed request cannot overwrite the keys used by a successful retry. Legacy image keys remain readable. It then holds the owner lock, rechecks ownership/photo absence, uploads both objects, and commits image metadata. Two simultaneous uploads cannot both succeed. Failed puts retain the reservation, so retry/deletion can find partial objects. Deletion enumerates every attempt and removes its full/thumbnail keys before deleting metadata; storage failures roll back metadata deletion. Missing owned delete targets return success so normal retries are idempotent. Account deletion first removes all owned media and freezes further writes, then calls Supabase Auth to delete that same user. If Auth fails, the account remains frozen and the delete-account action can be retried.
 
 ## Crash cleanup
 
-R2 and PostgreSQL do not share a transaction. If a process is killed while a PUT is in flight, the remote PUT can finish after the database lock is released. Durable inventory tombstones cover that failure window; they deliberately survive pin/account deletion and prevent retired pin IDs being reused. They contain only UUIDs, deterministic object keys and timestamps.
+R2 and PostgreSQL do not share a transaction. If a process is killed while a PUT is in flight, the remote PUT can finish after the database lock is released. Durable inventory tombstones cover that failure window; they deliberately survive pin/account deletion and prevent retired pin IDs being reused. They contain only owner/pin/attempt UUIDs, object keys and timestamps.
 
 Run the bundled operator cleanup script from a trusted environment with the same R2 and database secrets, for example every day:
 
@@ -51,7 +51,7 @@ Run the bundled operator cleanup script from a trusted environment with the same
 deno run --env-file=supabase/.env.local --allow-env --allow-net --config=supabase/functions/media/deno.json supabase/scripts/cleanup-media.ts
 ```
 
-It removes retired keys after a 15-minute settling interval and abandoned partial uploads after a day, using the same owner lock. It never deletes a committed active image. Tombstones stay for future sweeps and ID retirement. Schedule this command in the operator's existing job runner; source alone does not install a schedule. Monitor failures. The app's delete actions also retry ordinary storage failures immediately; the sweep covers abnormal termination. Do not purge inventory rows without reconciling the private bucket.
+It removes retired keys after a 15-minute settling interval and abandoned partial uploads after a day, using the same owner lock. It skips the exact keys referenced by a committed active image while still cleaning abandoned attempts belonging to that same pin. Tombstones stay for future sweeps and ID retirement. Schedule this command in the operator's existing job runner; source alone does not install a schedule. Monitor failures. The app's delete actions also retry ordinary storage failures immediately; the sweep covers abnormal termination. Do not purge inventory rows without reconciling the private bucket.
 
 ## CORS and storage
 

@@ -21,3 +21,11 @@ Browser integration tests intercept external services at the network boundary. D
 - `npm audit` reports 10 moderate dependency-path findings through Expo's `xcode` / `uuid` tooling dependency (GHSA-w5hq-g745-h8pq). Review an upstream-compatible update before release; the audit's proposed Expo 46 downgrade is incompatible with this SDK 57 project and was not applied.
 
 GitHub Actions contains repeatable checks for both fixture-connected UI and credential-free demo builds. Local passing checks do not claim a completed hosted CI run.
+
+## September 16 backend preparation
+
+- The stale-upload retry race is fixed using separately inventoried attempt keys. The regression reproduces a timed-out PUT completing after a retry and checks that the committed image is unchanged.
+- An upgrade migration preserves existing object keys and grants. Apply the initial migration and then `202609160001_media_attempts.sql` before deploying the updated function and cleanup script.
+- 29 backend tests and the Deno check passed; independent backend review approved the code for deployment and live acceptance checks.
+- Supabase CLI 2.117.0 is installed as a pinned development dependency. The configuration checker reports missing fields without displaying credentials.
+- Hosted tables/functions have not yet been deployed. CLI login and the remaining server-only configuration are required.
