@@ -2,7 +2,7 @@
 
 ## Scope and authorization
 
-The user authorized connecting the existing Supabase project and R2 bucket. They requested staged work because their usage window is almost exhausted. Do not start the next stage automatically after completing the current checkpoint.
+The user authorized connecting the existing Supabase project and R2 bucket and requested resumable stages. They then broadened the app to Collectibles: customizable collectible types (Pins, Pokémon Cards, Bottle Caps, Boots, etc.), with collections and items within them. This checkpoint records that completed schema/UI stage; media integration remains next.
 
 ## Stage 1 — database setup (complete)
 
@@ -25,6 +25,17 @@ The user authorized connecting the existing Supabase project and R2 bucket. They
 - Deploy `media` using the installed Supabase CLI; verify rejection of unauthenticated requests.
 - Arrange the cleanup job with the updated attempt-aware cleanup script.
 
+## Stage 1b — Collectibles hierarchy (live database complete)
+
+- Added and applied `202609160002_collectibles_hierarchy.sql`; all three local/remote migration versions match.
+- Preflight confirmed zero Auth users, collections, pins/images, or media attempts and no table-name conflicts. No user data or credentials were printed, and no database reset occurred.
+- Public tables are now `categories`, `collections`, `items`, and `item_images`. Private inventory and state remain server-only. The migration renames existing tables/columns in place, retains object keys, and assigns existing collections to each owner's Pins starter category.
+- Categories are custom, owner-scoped rows. New Auth users receive Pins automatically; it can be renamed or deleted. Collections require an owned category and can be moved without changing their items/photos. Direct category deletion is allowed only when empty.
+- Limits: 20 categories, 50 collections, 500 items. Category deletion uses the owner lock and respects frozen account state; Auth's account cascade remains possible.
+- Live verification confirmed four public tables with RLS, 11 owner policies, six parent foreign keys and seven triggers. Anonymous table access, client owner/identity changes, image-key writes and private-schema access all returned false; category selection updates and empty-category deletion grants are present.
+- The app/UI/demo and media source now use generic item terminology and Collectibles branding. Media requests use `itemId`, `itemIds`, and `delete-item`; deploy the matching current function/cleanup code, not an older pin-based version.
+- Local tests, browser results, and native export status are recorded in `VERIFICATION.md`. Real Supabase/R2 account behavior still needs Stage 3 acceptance.
+
 ## Stage 3 — connected app acceptance (pending)
 
 - Configure Auth/email/recovery settings, matching password rules.
@@ -42,4 +53,4 @@ The user authorized connecting the existing Supabase project and R2 bucket. They
 
 ## Current stopping point
 
-Database migrations are live. Media function deployment, R2 connection/privacy/CORS verification, Auth setup, cleanup scheduling and live two-account tests are still pending. The frontend stays in demo mode. Resume with Stage 2; do not reapply or reset Stage 1.
+The generic Collectibles schema is live, and category/collection/item UI is implemented. Media function deployment, R2 connection/privacy/CORS verification, Auth setup, cleanup scheduling and live two-account tests are still pending. The frontend stays in demo mode. Resume with Stage 2 using the new item-based API; do not reapply or reset Stage 1/1b.

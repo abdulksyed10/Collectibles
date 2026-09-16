@@ -9,7 +9,7 @@ export function connectDatabase(connectionString:string,allowLocal=false) {
   const client=postgres(connectionString,{
     max:1,prepare:false,connect_timeout:10,idle_timeout:20,
     ssl:local?false:{rejectUnauthorized:true},
-    connection:{application_name:'pin-keeper-media',statement_timeout:30000,idle_in_transaction_session_timeout:120000},
+    connection:{application_name:'collectibles-media',statement_timeout:30000,idle_in_transaction_session_timeout:120000},
   });
   const session=(sql:postgres.Sql|postgres.TransactionSql):Session=>({
     async query<T extends Record<string,unknown>>(query:string,params:unknown[]=[]) {

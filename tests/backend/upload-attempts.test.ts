@@ -34,7 +34,7 @@ const store = {
   async remove(keys: string[]) { keys.forEach(key => objects.delete(key)); },
   async sign(key: string) { return `https://private.example/${key}`; },
 };
-const upload = (pinId: string, bytes: Uint8Array) => ({ action: 'upload' as const, pinId, imageBase64: Buffer.from(bytes).toString('base64'), thumbnailBase64: Buffer.from(bytes).toString('base64') });
+const upload = (itemId: string, bytes: Uint8Array) => ({ action: 'upload' as const, itemId, imageBase64: Buffer.from(bytes).toString('base64'), thumbnailBase64: Buffer.from(bytes).toString('base64') });
 
 before(async () => {
   pg = new PGlite();
@@ -58,9 +58,19 @@ before(async () => {
 after(async () => pg?.close());
 
 test('upgrade preserves old image keys and private owner reads', async () => {
-  const result = await media.handle(owner, { action: 'read', pinIds: [legacy] }) as { images: { url: string }[] };
+  const [{category_id:categoryId}]=await db.query<{category_id:string}>('SELECT category_id FROM collections WHERE id=$1',[collection]);
+  const [starter]=await db.query<{id:string;name:string}>('SELECT id,name FROM categories WHERE owner_id=$1',[owner]);
+  assert.deepEqual(starter,{id:categoryId,name:'Pins'});
+  assert.deepEqual((await db.query<{id:string}>('SELECT id FROM items WHERE owner_id=$1 ORDER BY id',[owner])).map(row=>row.id),[legacy,retry]);
+  assert.deepEqual((await db.query<{full_key:string;thumb_key:string}>('SELECT full_key,thumb_key FROM item_images WHERE item_id=$1',[legacy]))[0],
+    {full_key:`${owner}/${legacy}/full.jpg`,thumb_key:`${owner}/${legacy}/thumb.jpg`});
+  assert.deepEqual((await db.query<{item_id:string;full_key:string}>('SELECT item_id,full_key FROM private.media_inventory WHERE item_id=$1',[legacy]))[0],
+    {item_id:legacy,full_key:`${owner}/${legacy}/full.jpg`});
+  assert.deepEqual((await db.query<{categories_count:number;collections_count:number;items_count:number}>('SELECT categories_count,collections_count,items_count FROM private.owner_state WHERE owner_id=$1',[owner]))[0],
+    {categories_count:1,collections_count:1,items_count:2});
+  const result = await media.handle(owner, { action: 'read', itemIds: [legacy] }) as { images: { url: string }[] };
   assert.equal(result.images[0].url, `https://private.example/${owner}/${legacy}/full.jpg`);
-  assert.deepEqual(await media.handle(other, { action: 'read', pinIds: [legacy] }), { images: [] });
+  assert.deepEqual(await media.handle(other, { action: 'read', itemIds: [legacy] }), { images: [] });
 });
 
 test('a timed-out PUT completing after retry cannot alter the winning image, and sweep removes only the abandoned attempt', async () => {
@@ -68,32 +78,32 @@ test('a timed-out PUT completing after retry cannot alter the winning image, and
   await assert.rejects(media.handle(owner, upload(retry, red)), /storage timeout/);
   await media.handle(owner, upload(retry, blue));
   delayedPuts.shift()!();
-  const [winner] = await db.query<{ full_key: string; thumb_key: string }>('SELECT full_key,thumb_key FROM pin_images WHERE pin_id=$1', [retry]);
+  const [winner] = await db.query<{ full_key: string; thumb_key: string }>('SELECT full_key,thumb_key FROM item_images WHERE item_id=$1', [retry]);
   assert.deepEqual(objects.get(winner.full_key), new Uint8Array(blue), 'late first PUT must not overwrite the committed full image');
   assert.deepEqual(objects.get(winner.thumb_key), new Uint8Array(blue));
-  const attempts = await db.query('SELECT * FROM private.media_inventory WHERE pin_id=$1', [retry]);
+  const attempts = await db.query('SELECT * FROM private.media_inventory WHERE item_id=$1', [retry]);
   assert.equal(attempts.length, 2, 'each attempted upload needs a durable reservation');
-  await pg.query(`UPDATE private.media_inventory SET created_at=now()-interval '2 days' WHERE pin_id=$1`, [retry]);
-  assert.equal(await sweepMedia(db, store), 1, 'abandoned attempt must be eligible even though this pin has an active image');
+  await pg.query(`UPDATE private.media_inventory SET created_at=now()-interval '2 days' WHERE item_id=$1`, [retry]);
+  assert.equal(await sweepMedia(db, store), 1, 'abandoned attempt must be eligible even though this item has an active image');
   assert.equal([...objects.keys()].filter(key => key.includes(retry)).length, 2);
   assert.deepEqual(objects.get(winner.full_key), new Uint8Array(blue));
   assert.ok(objects.has(`${owner}/${legacy}/full.jpg`), 'legacy committed image also remains protected');
 });
 
-test('pin deletion removes every attempt and sweep removes late writes after deletion without touching other pins', async () => {
-  const pin = '30000000-0000-4000-8000-000000000023';
-  await pg.query(`INSERT INTO pins(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'Delete retry')`, [pin, owner, collection]);
+test('item deletion removes every attempt and sweep removes late writes after deletion without touching other items', async () => {
+  const item = '30000000-0000-4000-8000-000000000023';
+  await pg.query(`INSERT INTO items(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'Delete retry')`, [item, owner, collection]);
   failNextPut = true;
-  await assert.rejects(media.handle(owner, upload(pin, red)), /storage timeout/);
-  await media.handle(owner, upload(pin, blue));
-  await media.handle(owner, { action: 'delete-pin', pinId: pin });
-  assert.equal([...objects.keys()].some(key => key.includes(pin)), false);
+  await assert.rejects(media.handle(owner, upload(item, red)), /storage timeout/);
+  await media.handle(owner, upload(item, blue));
+  await media.handle(owner, { action: 'delete-item', itemId: item });
+  assert.equal([...objects.keys()].some(key => key.includes(item)), false);
   delayedPuts.shift()!();
-  await pg.query(`UPDATE private.media_inventory SET deleted_at=now()-interval '16 minutes' WHERE pin_id=$1`, [pin]);
+  await pg.query(`UPDATE private.media_inventory SET deleted_at=now()-interval '16 minutes' WHERE item_id=$1`, [item]);
   assert.equal(await sweepMedia(db, store), 2);
-  assert.equal([...objects.keys()].some(key => key.includes(pin)), false);
-  assert.equal((await db.query('SELECT * FROM pin_images WHERE pin_id=$1', [retry])).length, 1);
-  await assert.rejects(pg.query(`INSERT INTO pins(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'Reused')`, [pin, owner, collection]), /retired pin/);
+  assert.equal([...objects.keys()].some(key => key.includes(item)), false);
+  assert.equal((await db.query('SELECT * FROM item_images WHERE item_id=$1', [retry])).length, 1);
+  await assert.rejects(pg.query(`INSERT INTO items(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'Reused')`, [item, owner, collection]), /retired item/);
 });
 
 test('collection and account deletion enumerate all attempts including old-schema keys', async () => {
@@ -101,7 +111,7 @@ test('collection and account deletion enumerate all attempts including old-schem
   assert.equal(objects.size, 0);
   assert.equal((await db.query('SELECT * FROM private.media_inventory WHERE owner_id=$1 AND deleted_at IS NULL', [owner])).length, 0);
   // A late abandoned object can still arrive after its collection was removed.
-  const [old] = await db.query<{ full_key: string }>('SELECT full_key FROM private.media_inventory WHERE pin_id=$1 LIMIT 1', [retry]);
+  const [old] = await db.query<{ full_key: string }>('SELECT full_key FROM private.media_inventory WHERE item_id=$1 LIMIT 1', [retry]);
   objects.set(old.full_key, red);
   await media.handle(owner, { action: 'delete-account' });
   assert.equal(objects.size, 0);

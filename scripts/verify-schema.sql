@@ -4,31 +4,36 @@ select jsonb_build_object(
     select jsonb_agg(jsonb_build_object('schema', n.nspname, 'table', c.relname, 'rls', c.relrowsecurity) order by n.nspname, c.relname)
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where c.relkind = 'r' and (
-      (n.nspname = 'public' and c.relname in ('collections', 'pins', 'pin_images')) or
+      (n.nspname = 'public' and c.relname in ('categories', 'collections', 'items', 'item_images')) or
       (n.nspname = 'private' and c.relname in ('owner_state', 'media_inventory'))
     )
   ),
   'owner_policies', (
     select jsonb_agg(jsonb_build_object('table', tablename, 'policy', policyname, 'operation', cmd, 'roles', roles, 'using', qual, 'check', with_check) order by tablename, policyname)
-    from pg_policies where schemaname = 'public' and tablename in ('collections', 'pins', 'pin_images')
+    from pg_policies where schemaname = 'public' and tablename in ('categories', 'collections', 'items', 'item_images')
   ),
   'relationships', (
     select jsonb_agg(jsonb_build_object('table', conrelid::regclass::text, 'definition', pg_get_constraintdef(oid)) order by conrelid::regclass::text, conname)
-    from pg_constraint where contype = 'f' and conrelid in ('public.collections'::regclass, 'public.pins'::regclass, 'public.pin_images'::regclass)
+    from pg_constraint where contype = 'f' and conrelid in ('public.categories'::regclass, 'public.collections'::regclass, 'public.items'::regclass, 'public.item_images'::regclass)
   ),
   'anonymous_can_access_tables', (
+    has_table_privilege('anon', 'public.categories', 'SELECT,INSERT,UPDATE,DELETE') or
     has_table_privilege('anon', 'public.collections', 'SELECT,INSERT,UPDATE,DELETE') or
-    has_table_privilege('anon', 'public.pins', 'SELECT,INSERT,UPDATE,DELETE') or
-    has_table_privilege('anon', 'public.pin_images', 'SELECT,INSERT,UPDATE,DELETE')
+    has_table_privilege('anon', 'public.items', 'SELECT,INSERT,UPDATE,DELETE') or
+    has_table_privilege('anon', 'public.item_images', 'SELECT,INSERT,UPDATE,DELETE')
   ),
-  'client_can_change_pin_owner', has_column_privilege('authenticated', 'public.pins', 'owner_id', 'UPDATE'),
-  'client_can_write_image_keys', has_column_privilege('authenticated', 'public.pin_images', 'full_key', 'INSERT,UPDATE'),
+  'client_can_change_item_owner', has_column_privilege('authenticated', 'public.items', 'owner_id', 'UPDATE'),
+  'client_can_change_category_owner', has_column_privilege('authenticated', 'public.categories', 'owner_id', 'UPDATE'),
+  'client_can_change_category_identity', has_column_privilege('authenticated', 'public.categories', 'id', 'UPDATE'),
+  'client_can_delete_categories', has_table_privilege('authenticated', 'public.categories', 'DELETE'),
+  'client_can_set_collection_category', has_column_privilege('authenticated', 'public.collections', 'category_id', 'UPDATE'),
+  'client_can_write_image_keys', has_column_privilege('authenticated', 'public.item_images', 'full_key', 'INSERT,UPDATE'),
   'client_can_access_private_schema', has_schema_privilege('authenticated', 'private', 'USAGE'),
   'inventory_primary_key', (
     select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'private.media_inventory'::regclass and contype = 'p'
   ),
   'triggers', (
     select jsonb_agg(tgname order by tgname) from pg_trigger
-    where tgrelid in ('public.collections'::regclass, 'public.pins'::regclass) and not tgisinternal
+    where tgrelid in ('public.categories'::regclass, 'public.collections'::regclass, 'public.items'::regclass, 'auth.users'::regclass) and not tgisinternal
   )
 ) as verification;

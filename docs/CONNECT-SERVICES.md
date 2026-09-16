@@ -39,7 +39,7 @@ npx supabase db push --dry-run
 npx supabase db push
 ```
 
-Apply the files in timestamp order. The initial migration creates tables, relationships, indexes, owner policies and quotas; the follow-up migration supports isolated photo-upload attempts. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
+Apply all three files in timestamp order. The initial migration creates tables, relationships, indexes, owner policies and quotas; the second migration supports isolated photo-upload attempts; `202609160002_collectibles_hierarchy.sql` adds customizable categories and renames pins to items while preserving existing data and image keys. Deploy the updated item-based media function after this migration. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
 
 ## 4. Configure R2 privacy and browser access
 

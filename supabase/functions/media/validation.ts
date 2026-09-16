@@ -9,9 +9,9 @@ export const URL_TTL_SECONDS = 300;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type Action =
-  | { action:'upload'; pinId:string; imageBase64:string; thumbnailBase64:string }
-  | { action:'read'; pinIds:string[] }
-  | { action:'delete-pin'; pinId:string }
+  | { action:'upload'; itemId:string; imageBase64:string; thumbnailBase64:string }
+  | { action:'read'; itemIds:string[] }
+  | { action:'delete-item'; itemId:string }
   | { action:'delete-collection'; collectionId:string }
   | { action:'delete-account' };
 
@@ -24,19 +24,19 @@ export function validateAction(value: unknown): Action {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new MediaError(400,'invalid_request','Expected an object.');
   const body = value as Record<string,unknown>;
   const allowed: Record<string,string[]> = {
-    upload:['action','pinId','imageBase64','thumbnailBase64'], read:['action','pinIds'],
-    'delete-pin':['action','pinId'], 'delete-collection':['action','collectionId'], 'delete-account':['action'],
+    upload:['action','itemId','imageBase64','thumbnailBase64'], read:['action','itemIds'],
+    'delete-item':['action','itemId'], 'delete-collection':['action','collectionId'], 'delete-account':['action'],
   };
   if (typeof body.action !== 'string' || !Object.hasOwn(allowed,body.action)) throw new MediaError(400,'invalid_action','Unknown media action.');
   if (Object.keys(body).some(key => !allowed[body.action as string].includes(key))) throw new MediaError(400,'invalid_request','Unexpected request field.');
   switch(body.action) {
     case 'upload':
       if (typeof body.imageBase64 !== 'string' || !body.imageBase64 || typeof body.thumbnailBase64 !== 'string' || !body.thumbnailBase64) throw new MediaError(400,'invalid_image','Both image and thumbnail are required.');
-      return {action:'upload',pinId:uuid(body.pinId),imageBase64:body.imageBase64,thumbnailBase64:body.thumbnailBase64};
+      return {action:'upload',itemId:uuid(body.itemId),imageBase64:body.imageBase64,thumbnailBase64:body.thumbnailBase64};
     case 'read':
-      if (!Array.isArray(body.pinIds) || body.pinIds.length > 100) throw new MediaError(400,'invalid_ids','Read accepts at most 100 pin IDs.');
-      return {action:'read',pinIds:[...new Set(body.pinIds.map(uuid))]};
-    case 'delete-pin': return {action:'delete-pin',pinId:uuid(body.pinId)};
+      if (!Array.isArray(body.itemIds) || body.itemIds.length > 100) throw new MediaError(400,'invalid_ids','Read accepts at most 100 item IDs.');
+      return {action:'read',itemIds:[...new Set(body.itemIds.map(uuid))]};
+    case 'delete-item': return {action:'delete-item',itemId:uuid(body.itemId)};
     case 'delete-collection': return {action:'delete-collection',collectionId:uuid(body.collectionId)};
     default: return {action:'delete-account'};
   }

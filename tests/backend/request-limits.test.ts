@@ -9,5 +9,5 @@ test('upload boundary rejects invalid and oversized image data', () => {
 
 test('request boundary rejects oversized bodies and arbitrary storage keys', async () => {
   await assert.rejects(readBoundedJson(new Request('https://local', { method:'POST', headers:{'content-type':'application/json','content-length':'4000000'},body:'{}' })));
-  assert.throws(() => validateAction({action:'delete-pin',pinId:'not-a-uuid',key:'another-owner/photo.jpg'}));
+  assert.throws(() => validateAction({action:'delete-item',itemId:'not-a-uuid',key:'another-owner/photo.jpg'}));
 });

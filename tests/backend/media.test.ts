@@ -39,10 +39,10 @@ test('bounded JSON reader rejects declared and streamed excess, invalid JSON and
 });
 
 test('media action validation never accepts arbitrary keys or unbounded read batches', () => {
-  assert.deepEqual(validateAction({action:'read',pinIds:[id,id]}), {action:'read',pinIds:[id]});
-  assert.throws(() => validateAction({action:'read',pinIds:Array(101).fill(id)}), /100/);
-  assert.throws(() => validateAction({action:'read',pinIds:['../other-user']}), /UUID/);
-  assert.throws(() => validateAction({action:'delete-pin',pinId:id,full_key:'other/key'}), /Unexpected/);
-  assert.throws(() => validateAction({action:'upload',pinId:id,imageBase64:'',thumbnailBase64:''}), /image/);
+  assert.deepEqual(validateAction({action:'read',itemIds:[id,id]}), {action:'read',itemIds:[id]});
+  assert.throws(() => validateAction({action:'read',itemIds:Array(101).fill(id)}), /100/);
+  assert.throws(() => validateAction({action:'read',itemIds:['../other-user']}), /UUID/);
+  assert.throws(() => validateAction({action:'delete-item',itemId:id,full_key:'other/key'}), /Unexpected/);
+  assert.throws(() => validateAction({action:'upload',itemId:id,imageBase64:'',thumbnailBase64:''}), /image/);
   assert.throws(() => validateAction({action:'unknown'}), /action/);
 });

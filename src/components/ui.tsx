@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
-import { X, type LucideIcon, Pin, LockKeyhole } from 'lucide-react-native';
+import { X, type LucideIcon, Layers3, LockKeyhole } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 export const colors = { paper: '#F8F7F3', card: '#FFFFFF', ink: '#253C35', muted: '#748079', line: '#E4E8E0', green: '#294D40', pale: '#E8EFE8', coral: '#BB6145', sand: '#EFE7D8', danger: '#A53636' };
 export const fonts = { body: 'DMSans_400Regular', medium: 'DMSans_500Medium', bold: 'DMSans_700Bold', heading: 'InstrumentSerif_400Regular' };
@@ -15,7 +15,7 @@ export const ui = StyleSheet.create({
   card: { borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, padding: 22 },
 });
 export function Brand({ small = false }: { small?: boolean }) {
-  return <View style={ui.row}><View style={{ backgroundColor: colors.green, width: small ? 34 : 42, height: small ? 34 : 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Pin size={small ? 19 : 23} color="#FFF" strokeWidth={1.7} /></View><Text style={{ fontFamily: fonts.bold, fontSize: small ? 18 : 22, color: colors.ink, letterSpacing: -0.6 }}>pin keeper<Text style={{ color: colors.coral }}>.</Text></Text></View>;
+  return <View style={ui.row}><View style={{ backgroundColor: colors.green, width: small ? 34 : 42, height: small ? 34 : 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Layers3 size={small ? 19 : 23} color="#FFF" strokeWidth={1.7} /></View><Text style={{ fontFamily: fonts.bold, fontSize: small ? 18 : 22, color: colors.ink, letterSpacing: -0.6 }}>collectibles<Text style={{ color: colors.coral }}>.</Text></Text></View>;
 }
 export function Button({ title, onPress, icon: Icon, secondary, danger, loading, disabled, style }: { title: string; onPress: () => void; icon?: LucideIcon; secondary?: boolean; danger?: boolean; loading?: boolean; disabled?: boolean; style?: ViewStyle }) {
   const fg = secondary ? (danger ? colors.danger : colors.ink) : '#FFFFFF';

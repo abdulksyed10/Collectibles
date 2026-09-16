@@ -6,11 +6,14 @@ function bounded(value: string, label: string, max: number, required = true) {
   if (clean.length > max) throw new Error(`${label} must be ${max} characters or fewer.`);
   return clean;
 }
-export function validatePin(value: { title: string; notes: string }) {
-  return { title: bounded(value.title, 'Pin name', 120), notes: bounded(value.notes, 'Notes', 2000, false) };
+export function validateItem(value: { title: string; notes: string }) {
+  return { title: bounded(value.title, 'Item name', 120), notes: bounded(value.notes, 'Notes', 2000, false) };
 }
 export function validateCollection(value: { name: string; description: string }) {
   return { name: bounded(value.name, 'Collection name', 80), description: bounded(value.description, 'Description', 500, false) };
+}
+export function validateCategory(value: { name: string }) {
+  return { name: bounded(value.name, 'Category name', 80) };
 }
 export function escapeSearch(value: string) { return value.replace(/[\\%_]/g, '\\$&'); }
 export function readClientConfig(url: string | undefined, key: string | undefined): ClientConfig {

@@ -1,4 +1,4 @@
-project_id = "pin-keeper"
+project_id = "collectibles"
 
 [api]
 enabled = true

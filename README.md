@@ -1,20 +1,22 @@
-# Pin Keeper
+# Collectibles
 
-A React Native + Expo frontend for a private pin-collection app on Android and iOS, with a responsive web preview. **Current phase: backend integration.** You can explore and edit an isolated demo without API keys. Supabase and Cloudflare R2 source is prepared; the database migrations are live, while media deployment and real-account checks are still pending.
+A React Native + Expo frontend for a private collectibles app on Android and iOS, with a responsive web preview. **Current phase: backend integration.** You can explore and edit an isolated demo without API keys. Supabase and Cloudflare R2 source is prepared; the database migrations are live, while media deployment and real-account checks are still pending.
 
 ## What you can try now
 
 - Sign-in, signup and recovery screens; real account operations wait for backend setup.
-- An explicit demo with six sample pins, three collections, and no service calls.
-- Private collections, pin names and notes, search, and paginated galleries.
+- An explicit demo with six sample items across Pins, Pokémon Cards, and Bottle Caps, with no service calls.
+- Custom categories for any collectible type, collections within each category, and items within each collection.
+- Create and rename categories, move collections between categories, and delete empty categories.
+- Private item names and notes, category/collection filters, search, and paginated galleries.
 - Camera/library photos compressed to JPEG with a separate thumbnail.
-- Edit pin details and delete pins/collections; account-deletion UI is prepared for integration.
+- Edit item details and delete items/collections; account-deletion UI is prepared for integration.
 - Repository interfaces ready for the planned private Supabase/R2 backend.
 - Clear loading, empty, error and unconfigured states.
 
 **Demo changes are temporary:** they reset on exit or reload. Photos selected in the demo are not uploaded; native image tools may leave temporary files in the device cache. Do not use the demo to store a real collection.
 
-The connected version will be an online-first MVP. It does not include public sharing, a social feed, offline synchronization, or photo replacement. Existing photos can be replaced by deleting and re-adding the pin. A saved pin can have no photo while an upload is pending or being retried.
+The connected version will be an online-first MVP. It does not include public sharing, a social feed, offline synchronization, or photo replacement. Existing photos can be replaced by deleting and re-adding the item. A saved item can have no photo while an upload is pending or being retried.
 
 ## Run locally
 
@@ -53,7 +55,7 @@ For a small invite-only beta, disable new signups in the hosted Supabase Auth se
 In Supabase Authentication / Email Templates / Reset Password, include the token in the email, for example:
 
 ```html
-<h2>Reset your Pin Keeper password</h2>
+<h2>Reset your Collectibles password</h2>
 <p>Your recovery code is: {{ .Token }}</p>
 <p>Enter this code in the app to choose a new password.</p>
 ```
@@ -124,4 +126,6 @@ Store publication is separate from this source-code MVP: it needs developer acco
 - `supabase`: migration, authenticated photo endpoint and cleanup script.
 - `tests`: domain, real SQL policy/media tests, and browser flows.
 
-To add your own backend later, keep the repository interface and replace its data calls feature by feature. Supabase Auth/PostgreSQL and the same R2 bucket can remain in use during that transition. The initial server limits are 50 collections and 500 pins per account; change them in a migration after measuring usage.
+The hierarchy is **category → collection → item**. Categories describe collectible types and are customizable: **Pins → Travel souvenirs → Yosemite pin**, **Pokémon Cards → First editions → Charizard**, or **Boots → Vintage → Desert boots**. Each account starts with a Pins category and can rename or remove it. Collections have one required category, and items have one required collection. Moving a collection preserves its items and photo keys.
+
+To add your own backend later, keep the repository interface and replace its data calls feature by feature. Supabase Auth/PostgreSQL and the same R2 bucket can remain in use during that transition. The initial server limits are 20 categories, 50 collections and 500 items per account; change them in a migration after measuring usage.

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../auth/session';
 import { serviceReady } from '../lib/supabase';
 import { Brand, Button, colors, ErrorMessage, Field, fonts, messageOf, ui } from '../components/ui';
-import { PinArtwork } from '../components/PinArtwork';
+import { CollectionArtwork } from '../components/CollectionArtwork';
 export function AuthScreen({ onDemo }: { onDemo: () => void }) {
   const wide = useWindowDimensions().width >= 860;
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'verify'>('signin');
@@ -29,13 +29,13 @@ export function AuthScreen({ onDemo }: { onDemo: () => void }) {
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, padding: wide ? 36 : 24 }}><View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center', flex: 1 }}><View style={[ui.row, { justifyContent: 'space-between', marginBottom: wide ? 40 : 30 }]}><Brand /><View style={[ui.row, { gap: 6 }]}><LockKeyhole size={14} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Your own little world</Text></View></View><View style={{ flex: 1, flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: wide ? 80 : 28 }}>
     <View style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', padding: wide ? 36 : 0, backgroundColor: wide ? '#EEF0E7' : undefined, borderRadius: 32, alignItems: wide ? 'flex-start' : 'center', alignSelf: wide ? 'stretch' : undefined, justifyContent: 'center', minHeight: wide ? 580 : undefined }}>
       {wide ? <Text style={{ color: colors.coral, fontFamily: fonts.bold, letterSpacing: 2, fontSize: 11, marginBottom: 22 }}>SMALL THINGS. GOOD STORIES.</Text> : null}
-      <Text style={[ui.title, { fontSize: wide ? 64 : 38, lineHeight: wide ? 68 : 42, textAlign: wide ? 'left' : 'center' }]}>Every pin has{wide ? '\n' : ' '}a story.</Text>
+      <Text style={[ui.title, { fontSize: wide ? 64 : 38, lineHeight: wide ? 68 : 42, textAlign: wide ? 'left' : 'center' }]}>Every find has{wide ? '\n' : ' '}a story.</Text>
       <Text style={[ui.muted, { fontSize: 16, lineHeight: 26, maxWidth: 320, marginTop: 18, textAlign: wide ? 'left' : 'center' }]}>Keep your favorite finds together, beautifully organized and entirely yours.</Text>
-      {wide ? <View style={{ marginVertical: 24, alignSelf: 'center' }}><PinArtwork /></View> : null}
+      {wide ? <View style={{ marginVertical: 24, alignSelf: 'center' }}><CollectionArtwork /></View> : null}
       {wide ? <View style={{ gap: 14 }}><View style={ui.row}><Layers3 size={17} color={colors.green} /><Text style={ui.text}>A place for every collection</Text></View><View style={ui.row}><LockKeyhole size={17} color={colors.green} /><Text style={ui.text}>Private, by default. Always yours.</Text></View></View> : null}
     </View>
     <View style={{ width: '100%', maxWidth: 400, paddingVertical: 20, gap: 23 }}>
-      <View style={{ gap: 10 }}><Text style={[ui.title, { fontSize: 37, lineHeight: 41 }]}>{heading}</Text><Text style={ui.muted}>{mode === 'signin' ? 'Sign in to pick up where you left off.' : mode === 'signup' ? 'Start saving the pins you love.' : 'Recover access to your private collection.'}</Text></View>
+      <View style={{ gap: 10 }}><Text style={[ui.title, { fontSize: 37, lineHeight: 41 }]}>{heading}</Text><Text style={ui.muted}>{mode === 'signin' ? 'Sign in to pick up where you left off.' : mode === 'signup' ? 'Start saving the things you love.' : 'Recover access to your private collection.'}</Text></View>
       {!serviceReady ? <View style={{ backgroundColor: colors.sand, padding: 15, borderRadius: 12 }}><Text style={[ui.text, { fontFamily: fonts.medium, fontSize: 13 }]}>Take a look around.</Text><Text style={[ui.muted, { fontSize: 12 }]}>Try a sample collection while account sign-in is being set up.</Text></View> : null}
       <View style={{ gap: 8 }}><Button title="Try the demo" secondary={serviceReady} onPress={onDemo} disabled={busy} icon={Layers3} /><Text style={[ui.muted, { fontSize: 12, textAlign: 'center' }]}>No account needed. Demo changes reset when you leave.</Text></View>
       <View style={{ gap: 18 }}><Field label="Email address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" editable={!busy} />
@@ -45,7 +45,7 @@ export function AuthScreen({ onDemo }: { onDemo: () => void }) {
       <ErrorMessage message={error} />{notice ? <Text accessibilityRole="alert" style={[ui.text, { color: colors.green, fontSize: 14 }]}>{notice}</Text> : null}
       <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery email' : 'Verify code'} onPress={submit} loading={busy} disabled={!serviceReady} icon={ArrowRight} />
       </View>
-      <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Pin Keeper?' : mode === 'signup' ? 'Already have an account?' : ''}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => change(mode === 'signin' ? 'signup' : 'signin')}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
+      <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Collectibles?' : mode === 'signup' ? 'Already have an account?' : ''}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => change(mode === 'signin' ? 'signup' : 'signin')}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
       <View style={[ui.row, { justifyContent: 'center', paddingTop: 12 }]}><LockKeyhole size={13} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Your photos and collections are visible only to you.</Text></View>
     </View>
   </View><Text style={[ui.muted, { fontSize: 11, textAlign: 'center', marginTop: 32 }]}>MADE FOR THE JOY OF COLLECTING</Text></View></ScrollView></KeyboardAvoidingView></SafeAreaView>;
