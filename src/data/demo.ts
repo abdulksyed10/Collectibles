@@ -1,5 +1,7 @@
 import type { Category, Collection, CollectionRepository, Item, ItemImage } from '../domain/models';
-import { validateCategory, validateCollection, validateItem } from '../domain/validation';
+import { validateCategory, validateCollection, validateCollectionSettings, validateItem } from '../domain/validation';
+import { todayLocalDate } from '../domain/dates';
+import { validateSharedPage } from '../domain/sharing';
 
 // Original vector illustrations, bundled as data URIs. No remote image requests.
 function samplePhoto(index: number) {
@@ -26,13 +28,13 @@ export function createDemoRepository(): CollectionRepository {
     { id: 'bottle-caps', name: 'Bottle Caps' },
   ].map(c => ({ ...c, owner_id, created_at }));
   let collections: Collection[] = [
-    { id: 'adventures', category_id: 'pins', name: 'Little adventures', description: 'Souvenir pins from places that stayed with me.' },
-    { id: 'favorites', category_id: 'pins', name: 'Everyday favorites', description: 'The little pins that make me smile.' },
-    { id: 'cards-first', category_id: 'cards', name: 'First editions', description: 'Cards with stories worth keeping.' },
-    { id: 'caps-travel', category_id: 'bottle-caps', name: 'Weekend finds', description: 'Bottle caps collected along the way.' },
-  ].map(c => ({ ...c, owner_id, created_at }));
-  const titles = ['Mountain memories', 'Lucky little cat', 'Ocean daydream', 'My first trading card', 'Lakeside cap', 'Orchard cap'];
-  let items: Item[] = titles.map((title, i) => ({ id: `sample-${i}`, owner_id, title, notes: 'An illustrated sample to explore. Add your own photo and story in this demo.', collection_id: ['adventures', 'favorites', 'adventures', 'cards-first', 'caps-travel', 'caps-travel'][i]!, created_at, updated_at: created_at }));
+    { id: 'adventures', category_id: 'pins', name: 'Travel pins', description: 'Pins from national parks and trips.' },
+    { id: 'favorites', category_id: 'pins', name: 'Enamel pins', description: '' },
+    { id: 'cards-first', category_id: 'cards', name: 'First editions', description: '' },
+    { id: 'caps-travel', category_id: 'bottle-caps', name: 'Bottle caps', description: '' },
+  ].map(c => ({ ...c, owner_id, created_at, visibility: 'private', acquired_on: '2026-01-01' }));
+  const titles = ['Mountain pin', 'Cat pin', 'Wave pin', 'Trading card', 'Lakeside cap', 'Orchard cap'];
+  let items: Item[] = titles.map((title, i) => ({ id: `sample-${i}`, owner_id, title, notes: 'Sample item.', collection_id: ['adventures', 'favorites', 'adventures', 'cards-first', 'caps-travel', 'caps-travel'][i]!, created_at, updated_at: created_at }));
   const images = new Map<string, ItemImage>(items.map((item, i) => [item.id, { itemId: item.id, url: samplePhoto(i), thumbnailUrl: samplePhoto(i), expiresAt: '2099-01-01T00:00:00Z' }]));
   function requireItem(id: string) { const item = items.find(p => p.id === id); if (!item) throw new Error('This item no longer exists.'); return item; }
   return {
@@ -51,16 +53,27 @@ export function createDemoRepository(): CollectionRepository {
     async listCollections() { return collections.map(c => ({ ...c })); },
     async saveCollection(draft, id) {
       if (!categories.some(c => c.id === draft.categoryId)) throw new Error('Choose a category first.');
-      const value = { ...validateCollection(draft), category_id: draft.categoryId };
+      const value = { ...validateCollection(draft), ...validateCollectionSettings(draft), category_id: draft.categoryId };
       if (id) { const existing = collections.find(c => c.id === id); if (!existing) throw new Error('This collection no longer exists.'); Object.assign(existing, value); return { ...existing }; }
       if (collections.length >= 50) throw new Error('This preview supports up to 50 collections.');
-      const collection = { ...value, id: `demo-${++sequence}`, owner_id, created_at: new Date().toISOString() };
+      const collection: Collection = { visibility: 'private', acquired_on: todayLocalDate(), ...value, id: `demo-${++sequence}`, owner_id, created_at: new Date().toISOString() };
       collections = [collection, ...collections]; return { ...collection };
     },
-    async listItems({ categoryId, collectionId, search, page }) {
-      const allowedCollections = new Set(collections.filter(c => !categoryId || c.category_id === categoryId).map(c => c.id));
+    async listItems({ categoryId, collectionId, search, page, visibility }) {
+      const allowedCollections = new Set(collections.filter(c => (!categoryId || c.category_id === categoryId) && (!visibility || c.visibility === visibility)).map(c => c.id));
       const found = items.filter(p => allowedCollections.has(p.collection_id) && (!collectionId || p.collection_id === collectionId) && p.title.toLowerCase().includes(search.trim().toLowerCase()));
       return { items: found.slice(page * 24, (page + 1) * 24).map(p => ({ ...p })), total: found.length, hasMore: (page + 1) * 24 < found.length };
+    },
+    async readSharedCollection(id, page) {
+      validateSharedPage(page);
+      const collection = collections.find(c => c.id === id && c.visibility === 'public');
+      if (!collection) throw new Error('Collection unavailable.');
+      const found = items.filter(item => item.collection_id === id);
+      return {
+        collection: { id, name: collection.name, description: collection.description, categoryName: categories.find(c => c.id === collection.category_id)?.name ?? '' },
+        items: found.slice(page * 24, (page + 1) * 24).map(item => ({ id: item.id, title: item.title, hasPhoto: images.has(item.id) })),
+        total: found.length, hasMore: (page + 1) * 24 < found.length,
+      };
     },
     async saveItem(draft, id) {
       const value = { ...validateItem(draft), collection_id: draft.collectionId, updated_at: new Date().toISOString() };

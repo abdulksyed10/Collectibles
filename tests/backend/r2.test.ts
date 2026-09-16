@@ -27,6 +27,19 @@ test('uploaded JPEGs have private no-store headers, exact bytes and signed authe
   assert.deepEqual(new Uint8Array(await captured.arrayBuffer()),new Uint8Array([1,2,3]));
 });
 
+test('public proxy reads signed R2 bytes without exposing a URL and bounds the body',async()=>{
+  let captured:Request|undefined;
+  const store=createR2Store(config,async input=>{
+    captured=input as Request;
+    return new Response(new Uint8Array([255,216,255,217]));
+  });
+  assert.deepEqual(await store.get('owner/item/full.jpg'),new Uint8Array([255,216,255,217]));
+  assert.equal(captured?.method,'GET');
+  assert.match(captured?.headers.get('authorization')||'',/^AWS4-HMAC-SHA256 /);
+  const oversized=createR2Store(config,async()=>new Response(new Uint8Array(2301953)));
+  await assert.rejects(oversized.get('owner/item/full.jpg'),/storage/i);
+});
+
 test('R2 bulk deletion checks per-object errors even with HTTP 200 and rejects HTTP failures',async()=>{
   const partial=createR2Store(config,async()=>new Response('<DeleteResult><Error><Key>x</Key><Code>AccessDenied</Code></Error></DeleteResult>'));
   await assert.rejects(partial.remove(['owner/item/full.jpg']),/storage/i);

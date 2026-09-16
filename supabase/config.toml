@@ -25,3 +25,8 @@ enable_confirmations = true
 verify_jwt = false
 import_map = "./functions/media/deno.json"
 entrypoint = "./functions/media/index.ts"
+
+[functions.public-media]
+verify_jwt = false
+import_map = "./functions/media/deno.json"
+entrypoint = "./functions/public-media/index.ts"

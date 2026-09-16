@@ -1,6 +1,8 @@
 import { requireClient } from '../lib/supabase';
-import { escapeSearch, validateCategory, validateCollection, validateItem } from '../domain/validation';
-import type { Category, Collection, CollectionRepository, Item, ItemImage } from '../domain/models';
+import { escapeSearch, validateCategory, validateCollection, validateCollectionSettings, validateItem } from '../domain/validation';
+import type { Category, Collection, CollectionRepository, Item, ItemImage, SharedCollectionPage } from '../domain/models';
+import { todayLocalDate } from '../domain/dates';
+import { isCollectionId, validateSharedPage } from '../domain/sharing';
 const PAGE_SIZE = 24;
 async function media<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await requireClient().functions.invoke('media', { body });
@@ -38,20 +40,29 @@ export const repository: CollectionRepository = {
   },
   async saveCollection(draft, id) {
     if (!draft.categoryId) throw new Error('Choose a category first.');
-    const value = { ...validateCollection(draft), category_id: draft.categoryId };
+    const value = { ...(!id ? { visibility: 'private', acquired_on: todayLocalDate() } : {}), ...validateCollection(draft), ...validateCollectionSettings(draft), category_id: draft.categoryId };
     const query = id ? requireClient().from('collections').update(value).eq('id', id) : requireClient().from('collections').insert(value);
     const { data, error } = await query.select().single();
     if (error) throw error;
     return data as Collection;
   },
-  async listItems({ categoryId, collectionId, search, page }) {
-    let query = requireClient().from('items').select('*,collections!inner(category_id)', { count: 'exact' }).order('created_at', { ascending: false }).order('id', { ascending: false });
+  async listItems({ categoryId, collectionId, search, page, visibility }) {
+    let query = requireClient().from('items').select('*,collections!inner(category_id,visibility)', { count: 'exact' }).order('created_at', { ascending: false }).order('id', { ascending: false });
+    if (visibility) query = query.eq('collections.visibility', visibility);
     if (categoryId) query = query.eq('collections.category_id', categoryId);
     if (collectionId) query = query.eq('collection_id', collectionId);
     if (search.trim()) query = query.ilike('title', `%${escapeSearch(search.trim())}%`);
     const { data, count, error } = await query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (error) throw error;
     return { items: data as Item[], total: count ?? 0, hasMore: (page + 1) * PAGE_SIZE < (count ?? 0) };
+  },
+  async readSharedCollection(collectionId, page) {
+    if (!isCollectionId(collectionId)) throw new Error('Collection unavailable.');
+    validateSharedPage(page);
+    const { data, error } = await requireClient().rpc('get_shared_collection', { p_collection_id: collectionId, p_page: page });
+    if (error) throw new Error('Unable to load this collection. Try again.');
+    if (!data) throw new Error('Collection unavailable.');
+    return data as SharedCollectionPage;
   },
   async saveItem(draft, id) {
     const value = { ...validateItem(draft), collection_id: draft.collectionId };

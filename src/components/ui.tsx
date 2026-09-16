@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
-import { X, type LucideIcon, Layers3, LockKeyhole } from 'lucide-react-native';
+import { X, type LucideIcon, Layers3 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 export const colors = { paper: '#F8F7F3', card: '#FFFFFF', ink: '#253C35', muted: '#748079', line: '#E4E8E0', green: '#294D40', pale: '#E8EFE8', coral: '#BB6145', sand: '#EFE7D8', danger: '#A53636' };
 export const fonts = { body: 'DMSans_400Regular', medium: 'DMSans_500Medium', bold: 'DMSans_700Bold', heading: 'InstrumentSerif_400Regular' };
@@ -25,9 +25,8 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
   return <View style={{ gap: 0 }}><Text style={ui.label}>{label}</Text><TextInput accessibilityLabel={label} placeholderTextColor="#9AA49C" {...props} style={[ui.input, props.multiline && { minHeight: 100, textAlignVertical: 'top' }, props.style]} /></View>;
 }
 export function ErrorMessage({ message }: { message: string }) { return message ? <Text accessibilityRole="alert" style={ui.error}>{message}</Text> : null; }
-export function PrivateBadge() { return <View style={[ui.row, { gap: 5, backgroundColor: colors.pale, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }]}><LockKeyhole size={12} color={colors.green} /><Text style={{ fontSize: 11, color: colors.green, fontFamily: fonts.bold }}>ONLY YOU</Text></View>; }
 export function Sheet({ title, subtitle, onClose, children, busy = false }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode; busy?: boolean }) {
-  return <Modal visible transparent animationType="fade" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={{ flex: 1, backgroundColor: '#172A2380', alignItems: 'center', justifyContent: 'center', padding: 16 }}><View accessibilityViewIsModal style={{ width: '100%', maxWidth: 530, maxHeight: '94%', backgroundColor: colors.paper, borderRadius: 24 }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 25, gap: 22 }}><View style={[ui.row, { justifyContent: 'space-between' }]}><Text style={[ui.title, { fontSize: 34, flex: 1 }]}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close" disabled={busy} onPress={onClose} hitSlop={10} style={{ padding: 8 }}><X size={22} color={colors.ink} /></Pressable></View>{subtitle ? <Text style={[ui.muted, { marginTop: -14 }]}>{subtitle}</Text> : null}{children}</ScrollView></View></SafeAreaView></Modal>;
+  return <Modal visible transparent animationType="fade" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={{ flex: 1, backgroundColor: '#172A2380', alignItems: 'center', justifyContent: 'center', padding: 12 }}><View accessibilityViewIsModal style={{ width: '100%', maxWidth: 530, maxHeight: '96%', backgroundColor: colors.paper, borderRadius: 20 }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18, gap: 16 }}><View style={[ui.row, { justifyContent: 'space-between' }]}><Text style={[ui.title, { fontSize: 30, lineHeight: 34, flex: 1 }]}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close" disabled={busy} onPress={onClose} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={22} color={colors.ink} /></Pressable></View>{subtitle ? <Text style={[ui.muted, { marginTop: -8 }]}>{subtitle}</Text> : null}{children}</ScrollView></View></SafeAreaView></Modal>;
 }
 export function messageOf(error: unknown) {
   if (error instanceof Error) return error.message;

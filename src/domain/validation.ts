@@ -1,4 +1,16 @@
+import { validateAcquiredDate } from './dates';
+import type { CollectionDraft, CollectionVisibility } from './models';
 export type ClientConfig = { ready: true; url: string; key: string } | { ready: false; reason: string };
+
+export function validateCollectionSettings(value: Pick<CollectionDraft, 'visibility' | 'acquiredOn'>) {
+  const settings: { visibility?: CollectionVisibility; acquired_on?: string } = {};
+  if (value.visibility !== undefined) {
+    if (value.visibility !== 'private' && value.visibility !== 'public') throw new Error('Choose Private or Public.');
+    settings.visibility = value.visibility;
+  }
+  if (value.acquiredOn !== undefined) settings.acquired_on = validateAcquiredDate(value.acquiredOn);
+  return settings;
+}
 
 function bounded(value: string, label: string, max: number, required = true) {
   const clean = value.trim();

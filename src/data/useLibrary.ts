@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useRepository } from './RepositoryProvider';
-import type { Category, Collection, Item, ItemImage } from '../domain/models';
+import type { Category, Collection, CollectionVisibility, Item, ItemImage } from '../domain/models';
 import { messageOf } from '../components/ui';
-export function useLibrary(categoryId: string | undefined, collectionId: string | undefined, search: string) {
+export function useLibrary(categoryId: string | undefined, collectionId: string | undefined, search: string, visibility: CollectionVisibility = 'private') {
   const repository = useRepository();
   const [categories, setCategories] = useState<Category[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]); const [items, setItems] = useState<Item[]>([]); const [images, setImages] = useState<Record<string, ItemImage>>({});
@@ -12,14 +12,14 @@ export function useLibrary(categoryId: string | undefined, collectionId: string 
   const refresh = useCallback(() => setRevision(n => n + 1), []);
   useEffect(() => {
     const request = ++requestRef.current; setLoading(true); setError(''); setPhotoError(''); setImages({}); setItems([]); itemsRef.current = []; pageRef.current = 0; loadingMoreRef.current = false; setMoreLoading(false);
-    Promise.all([repository.listCategories(), repository.listCollections(), repository.listItems({ categoryId, collectionId, search, page: 0 })]).then(async ([nextCategories, nextCollections, page]) => {
+    Promise.all([repository.listCategories(), repository.listCollections(), repository.listItems({ categoryId, collectionId, search, page: 0, visibility })]).then(async ([nextCategories, nextCollections, page]) => {
       if (request !== requestRef.current) return;
       setCategories(nextCategories); setCollections(nextCollections); setItems(page.items); itemsRef.current = page.items; setTotal(page.total); setHasMore(page.hasMore); setLoading(false);
       try { const urls = await repository.readImages(page.items.map(item => item.id)); if (request === requestRef.current) setImages(Object.fromEntries(urls.map(image => [image.itemId, image]))); }
       catch { if (request === requestRef.current) setPhotoError('Photos couldn’t load. Your item details are still here.'); }
     }).catch(e => { if (request === requestRef.current) { setError(messageOf(e)); setLoading(false); } });
     return () => { requestRef.current++; };
-  }, [categoryId, collectionId, search, revision, repository]);
+  }, [categoryId, collectionId, search, revision, repository, visibility]);
   const refreshPhotos = useCallback(async () => {
     const request = requestRef.current;
     try { const urls = await repository.readImages(itemsRef.current.map(item => item.id)); if (request === requestRef.current) { setImages(Object.fromEntries(urls.map(image => [image.itemId, image]))); setPhotoError(''); } }
@@ -34,7 +34,7 @@ export function useLibrary(categoryId: string | undefined, collectionId: string 
     if (!hasMore || loading || loadingMoreRef.current) return;
     const request = requestRef.current; loadingMoreRef.current = true; setMoreLoading(true); setError('');
     try {
-      const page = await repository.listItems({ categoryId, collectionId, search, page: pageRef.current + 1 });
+      const page = await repository.listItems({ categoryId, collectionId, search, page: pageRef.current + 1, visibility });
       if (request !== requestRef.current) return;
       pageRef.current++; const seen = new Set(itemsRef.current.map(item => item.id)); const next = [...itemsRef.current, ...page.items.filter(item => !seen.has(item.id))]; itemsRef.current = next; setItems(next); setHasMore(page.hasMore); setTotal(page.total);
       try { const urls = await repository.readImages(page.items.map(item => item.id)); if (request === requestRef.current) setImages(current => ({ ...current, ...Object.fromEntries(urls.map(image => [image.itemId, image])) })); }

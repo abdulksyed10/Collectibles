@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import type { ObjectStore } from './service.ts';
 import { MediaError,URL_TTL_SECONDS } from './validation.ts';
 
-export function createR2Store(config:{accountId:string;bucket:string;accessKeyId:string;secretAccessKey:string},fetcher:typeof fetch=fetch):ObjectStore {
+export function createR2Store(config:{accountId:string;bucket:string;accessKeyId:string;secretAccessKey:string},fetcher:typeof fetch=fetch):ObjectStore & {get(key:string):Promise<Uint8Array>} {
   if(!/^[a-f0-9]{32}$/i.test(config.accountId) || !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(config.bucket))throw new Error('Invalid R2 configuration.');
   const base=`https://${config.accountId}.r2.cloudflarestorage.com/${config.bucket}`;
   const aws=new AwsClient({accessKeyId:config.accessKeyId,secretAccessKey:config.secretAccessKey,service:'s3',region:'auto'});
@@ -22,6 +22,29 @@ export function createR2Store(config:{accountId:string;bucket:string;accessKeyId
   }
 
   return {
+    async get(key) {
+      const response=await send(keyUrl(key),{method:'GET'});
+      const reader=response.body?.getReader();
+      if(!reader)throw new MediaError(503,'storage_unavailable','Private photo storage is unavailable. Please retry.');
+      const chunks:Uint8Array[]=[];
+      let total=0;
+      try {
+        while(true) {
+          const {done,value}=await reader.read();
+          if(done)break;
+          total+=value.byteLength;
+          if(total>2301952)throw new Error('oversized object');
+          chunks.push(value);
+        }
+      } catch {
+        await reader.cancel().catch(()=>{});
+        throw new MediaError(503,'storage_unavailable','Private photo storage is unavailable. Please retry.');
+      }
+      const bytes=new Uint8Array(total);
+      let offset=0;
+      for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+      return bytes;
+    },
     async put(key,bytes) {
       const response=await send(keyUrl(key),{method:'PUT',headers:{'content-type':'image/jpeg','cache-control':'private, no-store, max-age=0'},body:new Uint8Array(bytes).buffer});
       await response.body?.cancel();

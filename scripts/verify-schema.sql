@@ -27,6 +27,16 @@ select jsonb_build_object(
   'client_can_change_category_identity', has_column_privilege('authenticated', 'public.categories', 'id', 'UPDATE'),
   'client_can_delete_categories', has_table_privilege('authenticated', 'public.categories', 'DELETE'),
   'client_can_set_collection_category', has_column_privilege('authenticated', 'public.collections', 'category_id', 'UPDATE'),
+  'collection_sharing_columns', (
+    select jsonb_agg(jsonb_build_object('column', column_name, 'type', data_type, 'default', column_default, 'nullable', is_nullable) order by column_name)
+    from information_schema.columns
+    where table_schema = 'public' and table_name = 'collections' and column_name in ('visibility', 'acquired_on')
+  ),
+  'anonymous_can_use_shared_projection', has_function_privilege('anon', 'public.get_shared_collection(uuid,integer)', 'EXECUTE'),
+  'shared_projection_security_definer', (
+    select prosecdef from pg_proc where oid = 'public.get_shared_collection(uuid,integer)'::regprocedure
+  ),
+  'anonymous_can_write_collections', has_table_privilege('anon', 'public.collections', 'INSERT,UPDATE,DELETE'),
   'client_can_write_image_keys', has_column_privilege('authenticated', 'public.item_images', 'full_key', 'INSERT,UPDATE'),
   'client_can_access_private_schema', has_schema_privilege('authenticated', 'private', 'USAGE'),
   'inventory_primary_key', (
