@@ -4,7 +4,7 @@
 
 The Expo frontend is usable through **Try the demo** with no credentials or services. A fresh repository in memory supplies sample pins on each visit. Edits and chosen photos reset when leaving/reloading; they are not uploaded. Account forms are present, but live access is disabled unless `EXPO_PUBLIC_ENABLE_BACKEND=true` and valid public configuration are supplied.
 
-The user has created the Supabase project and R2 bucket and authorized CLI deployment after local credentials are supplied. Backend source and tests are prepared. The Supabase tables and relations still need installation; the media function and bucket settings need deployment/verification.
+The user has created the Supabase project and R2 bucket and authorized CLI deployment after local credentials are supplied. Backend source and tests are prepared. Stage 1 is complete: the Supabase tables, relationships and owner policies are installed and verified. The media function and bucket settings still need deployment/verification. See DEPLOYMENT-CHECKPOINT.md before resuming.
 
 ## Data model
 

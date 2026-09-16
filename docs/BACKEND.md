@@ -1,6 +1,6 @@
 # Private backend
 
-**Integration in progress.** The frontend and backend source are prepared; the user has created Supabase and R2 resources. The upload-retry race is fixed and locally tested. Hosted migrations, function deployment and real-account verification must still be completed. Start with [Connect services](CONNECT-SERVICES.md).
+**Integration in progress.** The frontend and backend source are prepared; the user has created Supabase and R2 resources. The upload-retry race is fixed and locally tested. Hosted database migrations are applied and their schema/policies verified. Function deployment and real-account verification still need completion. Start with [Connect services](CONNECT-SERVICES.md).
 
 This backend requires a user-owned Supabase project and a **private** Cloudflare R2 bucket. Source and local tests do not provision or verify either service.
 

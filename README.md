@@ -1,6 +1,6 @@
 # Pin Keeper
 
-A React Native + Expo frontend for a private pin-collection app on Android and iOS, with a responsive web preview. **Current phase: backend integration.** You can explore and edit an isolated demo without API keys. Supabase and Cloudflare R2 source is prepared; the hosted schema, media function and real-account checks are awaiting configuration.
+A React Native + Expo frontend for a private pin-collection app on Android and iOS, with a responsive web preview. **Current phase: backend integration.** You can explore and edit an isolated demo without API keys. Supabase and Cloudflare R2 source is prepared; the database migrations are live, while media deployment and real-account checks are still pending.
 
 ## What you can try now
 
@@ -42,7 +42,7 @@ Get them from Supabase Project Settings / API Keys or the Connect dialog. A publ
 
 ## Connect the backend
 
-**Next phase:** start with [the integration plan and database relationships](docs/INTEGRATION-PLAN.md). It covers tables, ownership, credentials, the tested backend retry fix, and live acceptance checks. Start with [Connect services](docs/CONNECT-SERVICES.md); the [backend reference](docs/BACKEND.md) contains migration/API/deployment details. No services have been deployed.
+**Next phase:** start with [the integration plan and database relationships](docs/INTEGRATION-PLAN.md). It covers tables, ownership, credentials, the tested backend retry fix, and live acceptance checks. Start with [Connect services](docs/CONNECT-SERVICES.md); the [backend reference](docs/BACKEND.md) contains migration/API/deployment details. The database migrations are applied; media deployment and live app acceptance remain pending. See [the deployment checkpoint](docs/DEPLOYMENT-CHECKPOINT.md).
 
 Apply the checked-in migration to a new/empty project or review it against your existing schema before applying it. Do not reset a shared Supabase database. The frontend needs the tables and the deployed `media` function; supplying the project URL alone does not install them.
 

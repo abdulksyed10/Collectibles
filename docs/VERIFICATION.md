@@ -29,3 +29,7 @@ GitHub Actions contains repeatable checks for both fixture-connected UI and cred
 - 29 backend tests and the Deno check passed; independent backend review approved the code for deployment and live acceptance checks.
 - Supabase CLI 2.117.0 is installed as a pinned development dependency. The configuration checker reports missing fields without displaying credentials.
 - Hosted tables/functions have not yet been deployed. CLI login and the remaining server-only configuration are required.
+
+## Stage 1 hosted database checkpoint
+
+Both migrations were applied to the authorized project through the CLI after inspecting the empty schema and dry run. Live metadata checks confirmed the five app/private tables, parent foreign keys, seven owner policies, RLS on public tables, restricted client grants and the attempt-based inventory primary key. This verifies the deployed schema; R2/media and real-account end-to-end tests remain Stage 2/3 work. See `DEPLOYMENT-CHECKPOINT.md`.
