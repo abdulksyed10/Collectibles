@@ -22,7 +22,7 @@ The user authorized connecting the existing Supabase project and R2 bucket and r
 - Migration `202609160004_media_budgets.sql` was reviewed in a dry run and applied to the linked project. It adds private rate, byte, photo-count and public-read controls without modifying collection data.
 - Live verification confirms the limits row is seeded and enabled; anonymous/authenticated roles cannot read the limits, owner budgets, attempts or public-read counter.
 - The ignored server configuration passed its name-only checker. Seven server values were uploaded to Supabase secrets without printing their contents.
-- The empty R2 bucket accepted authenticated object requests. The S3 base URL rejected unsigned access. The Cloudflare dashboard confirms public access is disabled, there is no custom domain, and the public development URL is disabled. The current least-privilege R2 token cannot inspect CORS (HTTP 403); the dashboard confirms no CORS policy is defined, so browser signed-image reads need the narrow rule in `CONNECT-SERVICES.md` before web sharing is invited.
+- The empty R2 bucket accepted authenticated object requests. The S3 base URL rejected unsigned access. The Cloudflare dashboard confirms public access is disabled, there is no custom domain, and the public development URL is disabled. The current least-privilege R2 token cannot inspect CORS (HTTP 403); the dashboard now confirms a local browser rule for `http://127.0.0.1:4173` and `http://localhost:8081`, with only GET/HEAD access.
 - Both `media` and `public-media` functions are ACTIVE. A credential-free `media` request returned 401 and malformed `public-media` request returned 400, confirming the deployed code starts with its configured secrets.
 - The local backend flag is enabled in ignored `.env.local`; restart Expo with a cleared cache before trying the connected app.
 
@@ -66,4 +66,4 @@ The deployed defaults are 100 photos/account, 20 attempts/account/hour, 50 attem
 
 ## Current stopping point
 
-The generic Collectibles schema, sharing/date migration, media-budget migration and both media functions are live. The category/collection/item UI, private/public controls and read-only sharing source are implemented. Remaining work is Cloudflare browser CORS/public-domain confirmation, Auth/email configuration, cleanup scheduling, a hosted share URL, and disposable two-account/device acceptance. Do not reapply or reset completed migrations.
+The generic Collectibles schema, sharing/date migration, media-budget migration and both media functions are live. The category/collection/item UI, private/public controls and read-only sharing source are implemented. Remaining work is Auth/email configuration, cleanup scheduling, an exact hosted web origin and share URL, and disposable two-account/device acceptance. Do not reapply or reset completed migrations.

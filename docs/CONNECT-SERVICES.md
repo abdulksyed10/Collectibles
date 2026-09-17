@@ -60,7 +60,7 @@ Add this bucket CORS policy for local development, retaining any intentionally s
 
 Add the real web origin before hosting a browser version, and keep it in `MEDIA_ALLOWED_ORIGINS` too. Mobile app requests do not need CORS. Uploads pass through the authenticated media function, so direct browser PUT permission is unnecessary.
 
-The current R2 token can read and write objects but cannot inspect or change bucket CORS, which is appropriate for the deployed function. The Cloudflare dashboard has confirmed there is no CORS policy, no custom domain and no public development URL. Add the rule through that dashboard or with a separate bucket-configuration token; do not broaden the app's R2 token.
+The current R2 token can read and write objects but cannot inspect or change bucket CORS, which is appropriate for the deployed function. The Cloudflare dashboard confirms no custom domain and no public development URL. It now has the narrow local browser CORS rule above; add the exact hosted app origin before deploying a web build, without broadening the app's R2 token.
 
 ## 5. Deploy the media functions
 
@@ -88,6 +88,6 @@ Then test installed Android/iOS development builds, camera permissions and sessi
 
 ## Current project status
 
-For project `hoxesktykdwuvunhqnrp`, the five migrations, seven server secrets, and both Edge Functions are deployed. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. The bucket is empty and accepts authenticated R2 requests; its configuration/CORS still needs the Cloudflare dashboard check above. The local backend flag is now enabled. Create disposable accounts and complete the live checks in step 6 before inviting anyone.
+For project `hoxesktykdwuvunhqnrp`, the five migrations, seven server secrets, and both Edge Functions are deployed. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. The bucket is empty and accepts authenticated R2 requests; it has no public development URL or custom domain, and its local browser CORS rule is configured. The local backend flag is enabled. Create disposable accounts and complete the live checks in step 6 before inviting anyone.
 
 Provider references: [Supabase CLI migrations](https://supabase.com/docs/reference/cli/supabase-db-push), [function deployment](https://supabase.com/docs/guides/functions/deploy), [server secrets](https://supabase.com/docs/guides/functions/secrets), [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/).

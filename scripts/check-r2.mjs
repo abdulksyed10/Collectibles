@@ -11,6 +11,9 @@ try {
   const request = async (suffix, method = 'GET') => fetch(await client.sign(base + suffix, { method, signal: AbortSignal.timeout(20000) }));
   const head = await request('', 'HEAD');
   console.log(`R2 authenticated bucket access: HTTP ${head.status}`);
+  const localOrigin = 'http://127.0.0.1:4173';
+  const corsProbe = await fetch(await client.sign(base, { method: 'HEAD', headers: { Origin: localOrigin }, signal: AbortSignal.timeout(20000) }));
+  console.log(`R2 local browser CORS probe: HTTP ${corsProbe.status}; allowed origin: ${corsProbe.headers.get('access-control-allow-origin') === localOrigin}`);
   const objects = await request('?list-type=2&max-keys=1000');
   if (!objects.ok) throw new Error();
   const body = await objects.text();
@@ -25,5 +28,5 @@ try {
   else await cors.body?.cancel();
   const unsigned = await fetch(base, { method: 'HEAD', signal: AbortSignal.timeout(20000) });
   console.log(`Unsigned S3 bucket access: HTTP ${unsigned.status}. Public custom domains/r2.dev require separate verification.`);
-  if (!head.ok || unsigned.ok) process.exitCode = 1;
+  if (!head.ok || !corsProbe.ok || corsProbe.headers.get('access-control-allow-origin') !== localOrigin || unsigned.ok) process.exitCode = 1;
 } catch { console.error('R2 check failed. Check the local credentials and bucket permissions. Provider details were not printed.'); process.exitCode = 1; }
