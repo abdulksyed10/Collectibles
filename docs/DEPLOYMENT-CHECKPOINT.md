@@ -22,7 +22,7 @@ The user authorized connecting the existing Supabase project and R2 bucket and r
 - Verify the database connection and R2 credentials without printing secrets.
 - Inspect bucket privacy and CORS; configure the exact development origins.
 - Set hosted secrets from ignored `supabase/.env.local`.
-- Deploy `media` using the installed Supabase CLI; verify rejection of unauthenticated requests.
+- Deploy `media` and `public-media` using the installed Supabase CLI; verify owner-action authentication and public photo visibility checks.
 - Arrange the cleanup job with the updated attempt-aware cleanup script.
 
 ## Stage 1b — Collectibles hierarchy (live database complete)
@@ -41,6 +41,7 @@ The user authorized connecting the existing Supabase project and R2 bucket and r
 - Configure Auth/email/recovery settings, matching password rules.
 - Generate database types and test with two disposable accounts.
 - Verify ownership isolation, uploads, signed URLs, retries, deletion and cleanup.
+- Verify opt-in shared links from a signed-out browser, private-field exclusion, and revocation of metadata/photos. Configure the hosted web URL for native share links.
 - Enable the local backend flag and test the connected frontend.
 - Native development builds/device testing and store publication follow separately.
 
@@ -51,6 +52,15 @@ The user authorized connecting the existing Supabase project and R2 bucket and r
 - GitHub publishing remains separate; do not infer permission from a remote URL when the earlier destination question is unresolved.
 - See `docs/CONNECT-SERVICES.md` for operator commands and `docs/BACKEND.md` for backend behavior.
 
+## Stage 1c — collection sharing and acquired dates (live database complete)
+
+- Applied `202609160003_collection_sharing.sql` after a dry run that listed only this new migration.
+- Collections now have required `visibility` (default Private) and `acquired_on` (default current date) fields. Existing dates are backfilled from creation dates. No collection was published by deployment.
+- Live schema checks confirm all four public tables retain RLS and all 11 owner policies. Anonymous raw-table access and writes remain denied; only the explicit `get_shared_collection` projection is executable anonymously.
+- Public metadata exposes collection name/description/category and item names/photo availability. Notes, acquired dates, owner IDs and storage keys are excluded.
+- The UI now has compact mobile controls, Private/Public owner tabs, a date picker, opt-in sharing and a read-only public route. R2 remains private by design; the new `public-media` source checks visibility before proxying bytes with no-store headers.
+- Function deployment is still Stage 2. No live accounts or shared test collections were created in this stage. See `COLLECTION-SHARING.md` for the contract and setup.
+
 ## Current stopping point
 
-The generic Collectibles schema is live, and category/collection/item UI is implemented. Media function deployment, R2 connection/privacy/CORS verification, Auth setup, cleanup scheduling and live two-account tests are still pending. The frontend stays in demo mode. Resume with Stage 2 using the new item-based API; do not reapply or reset Stage 1/1b.
+The generic Collectibles schema and sharing/date migration are live. The category/collection/item UI, private/public controls and read-only sharing source are implemented. Both media functions, R2 connection/privacy/CORS verification, hosted web URL, Auth setup, cleanup scheduling and live two-account tests are still pending. The frontend stays in demo mode. Resume with Stage 2 using the current item-based API and public-media endpoint; do not reapply or reset Stage 1/1b/1c.

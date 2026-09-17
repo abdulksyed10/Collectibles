@@ -7,6 +7,6 @@
   },
   "compilerOptions": { "strict": true },
   "tasks": {
-    "check": "deno check index.ts ../../scripts/cleanup-media.ts"
+    "check": "deno check index.ts ../public-media/index.ts ../../scripts/cleanup-media.ts"
   }
 }

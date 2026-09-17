@@ -24,9 +24,13 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
   const [selected, setSelected] = useState<SharedItem | null>(null);
   const [failedPhotos, setFailedPhotos] = useState<Set<string>>(new Set());
   const [revision, setRevision] = useState(0);
+  const [revalidating, setRevalidating] = useState(false);
   const generation = useRef(0);
   const pageRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const revalidatingRef = useRef(false);
+  const readyRef = useRef(false);
+  const pendingRecheckRef = useRef(false);
   const refresh = useCallback(() => setRevision(n => n + 1), []);
 
   const loadPage = useCallback(async (page: number) => {
@@ -42,28 +46,79 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
     return { result, nextPhotos };
   }, [repository, collectionId, demo]);
 
+  const clearUnavailable = useCallback((error: unknown) => {
+    readyRef.current = false;
+    pendingRecheckRef.current = false;
+    pageRef.current = 0;
+    setCollection(null); setItems([]); setPhotos({}); setSelected(null); setFailedPhotos(new Set());
+    setHasMore(false); setTotal(0); setError(messageOf(error));
+  }, []);
+
+  const recheck = useCallback(async () => {
+    if (!readyRef.current || revalidatingRef.current) return;
+    if (loadingMoreRef.current) { pendingRecheckRef.current = true; return; }
+    const request = generation.current;
+    const lastPage = Math.min(pageRef.current, 20);
+    revalidatingRef.current = true;
+    setRevalidating(true);
+    try {
+      const refreshedItems: SharedItem[] = [];
+      const refreshedPhotos: Record<string, Photo> = {};
+      const seen = new Set<string>();
+      let firstCollection: SharedCollectionPage['collection'] | null = null;
+      let total = 0;
+      let hasMore = false;
+      for (let page = 0; page <= lastPage; page++) {
+        const { result, nextPhotos } = await loadPage(page);
+        if (request !== generation.current) return;
+        if (page === 0) firstCollection = result.collection;
+        for (const item of result.items) {
+          if (!seen.has(item.id)) { seen.add(item.id); refreshedItems.push(item); }
+        }
+        Object.assign(refreshedPhotos, nextPhotos);
+        total = result.total;
+        hasMore = result.hasMore;
+      }
+      if (request !== generation.current) return;
+      setCollection(firstCollection);
+      setItems(refreshedItems);
+      setPhotos(refreshedPhotos);
+      setTotal(total);
+      setHasMore(hasMore && lastPage < 20);
+      setSelected(current => current ? refreshedItems.find(item => item.id === current.id) ?? null : null);
+      setFailedPhotos(current => new Set([...current].filter(id => id in refreshedPhotos)));
+      setError('');
+    } catch (error) {
+      if (request === generation.current) clearUnavailable(error);
+    } finally {
+      if (request === generation.current) { revalidatingRef.current = false; setRevalidating(false); }
+    }
+  }, [loadPage, clearUnavailable]);
+
   useEffect(() => {
     const request = ++generation.current;
     setLoading(true); setError(''); setCollection(null); setItems([]); setPhotos({}); setSelected(null); setFailedPhotos(new Set());
-    pageRef.current = 0; loadingMoreRef.current = false; setMoreLoading(false);
+    pageRef.current = 0; loadingMoreRef.current = false; revalidatingRef.current = false; readyRef.current = false; pendingRecheckRef.current = false;
+    setMoreLoading(false); setRevalidating(false);
     void loadPage(0).then(({ result, nextPhotos }) => {
       if (request !== generation.current) return;
+      readyRef.current = true;
       setCollection(result.collection); setItems(result.items); setPhotos(nextPhotos); setTotal(result.total); setHasMore(result.hasMore);
-    }).catch(error => { if (request === generation.current) setError(messageOf(error)); })
+    }).catch(error => { if (request === generation.current) clearUnavailable(error); })
       .finally(() => { if (request === generation.current) setLoading(false); });
     return () => { generation.current++; };
-  }, [loadPage, revision]);
+  }, [loadPage, clearUnavailable, revision]);
 
   useEffect(() => {
     // Recheck open shared views on return and periodically so unpublished data
     // does not remain on screen indefinitely. Every photo request also checks.
-    const timer = setInterval(refresh, 60_000);
-    const listener = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    const timer = setInterval(() => { void recheck(); }, 60_000);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') void recheck(); });
     return () => { clearInterval(timer); listener.remove(); };
-  }, [refresh]);
+  }, [recheck]);
 
   async function loadMore() {
-    if (loading || !hasMore || loadingMoreRef.current) return;
+    if (loading || !hasMore || pageRef.current >= 20 || loadingMoreRef.current || revalidatingRef.current) return;
     const request = generation.current;
     loadingMoreRef.current = true; setMoreLoading(true);
     try {
@@ -71,10 +126,15 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
       if (request !== generation.current) return;
       pageRef.current++;
       setCollection(result.collection); setItems(current => { const seen = new Set(current.map(i => i.id)); return [...current, ...result.items.filter(i => !seen.has(i.id))]; });
-      setPhotos(current => ({ ...current, ...nextPhotos })); setHasMore(result.hasMore); setTotal(result.total);
+      setPhotos(current => ({ ...current, ...nextPhotos })); setHasMore(result.hasMore && pageRef.current < 20); setTotal(result.total);
     } catch (error) {
-      if (request === generation.current) { setCollection(null); setItems([]); setPhotos({}); setSelected(null); setError(messageOf(error)); }
-    } finally { if (request === generation.current) { loadingMoreRef.current = false; setMoreLoading(false); } }
+      if (request === generation.current) clearUnavailable(error);
+    } finally {
+      if (request === generation.current) {
+        loadingMoreRef.current = false; setMoreLoading(false);
+        if (pendingRecheckRef.current) { pendingRecheckRef.current = false; void recheck(); }
+      }
+    }
   }
 
   function photoFailed(id: string) { setFailedPhotos(current => new Set(current).add(id)); }
@@ -103,7 +163,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
         </Pressable>
       </View>}
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : collection && !error ? <Text style={[ui.muted, { padding: 8 }]}>No items.</Text> : null}
-      ListFooterComponent={hasMore && collection ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
+      ListFooterComponent={hasMore && collection ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} disabled={revalidating} style={{ margin: 8 }} /> : null}
     />
     {selected ? <Sheet title={selected.title} onClose={() => setSelected(null)}>
       {photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}

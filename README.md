@@ -8,15 +8,17 @@ A React Native + Expo frontend for a private collectibles app on Android and iOS
 - An explicit demo with six sample items across Pins, Pokémon Cards, and Bottle Caps, with no service calls.
 - Custom categories for any collectible type, collections within each category, and items within each collection.
 - Create and rename categories, move collections between categories, and delete empty categories.
-- Private item names and notes, category/collection filters, search, and paginated galleries.
+- Private/Public tabs for your own collections, category/collection filters, search, and paginated galleries.
+- Collections start private. Explicitly make one public to share a read-only link; notes and acquired dates stay private.
+- Collection acquired dates default to today and can be changed.
 - Camera/library photos compressed to JPEG with a separate thumbnail.
 - Edit item details and delete items/collections; account-deletion UI is prepared for integration.
-- Repository interfaces ready for the planned private Supabase/R2 backend.
+- Repository interfaces for Supabase/R2, with isolated demo data.
 - Clear loading, empty, error and unconfigured states.
 
 **Demo changes are temporary:** they reset on exit or reload. Photos selected in the demo are not uploaded; native image tools may leave temporary files in the device cache. Do not use the demo to store a real collection.
 
-The connected version will be an online-first MVP. It does not include public sharing, a social feed, offline synchronization, or photo replacement. Existing photos can be replaced by deleting and re-adding the item. A saved item can have no photo while an upload is pending or being retried.
+The connected version will be an online-first MVP with collection sharing. It does not include a social feed, public discovery, offline synchronization, or photo replacement. Existing photos can be replaced by deleting and re-adding the item. A saved item can have no photo while an upload is pending or being retried. Public links require the hosted web app and deployed services; the demo provides a local read-only preview.
 
 ## Run locally
 
@@ -36,6 +38,7 @@ For later integration, copy `.env.example` to `.env.local` (`Copy-Item .env.exam
 EXPO_PUBLIC_ENABLE_BACKEND=true
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+EXPO_PUBLIC_WEB_URL=https://YOUR_HOSTED_WEB_APP
 ```
 
 Get them from Supabase Project Settings / API Keys or the Connect dialog. A publishable key (or legacy `anon` key) is intended to ship inside the app. Row level security provides data protection. The app refuses recognized server keys. Never put service-role keys, R2 credentials, database passwords, or deployment tokens in `EXPO_PUBLIC_*`.
@@ -48,7 +51,7 @@ Get them from Supabase Project Settings / API Keys or the Connect dialog. A publ
 
 Apply the checked-in migration to a new/empty project or review it against your existing schema before applying it. Do not reset a shared Supabase database. The frontend needs the tables and the deployed `media` function; supplying the project URL alone does not install them.
 
-For a small invite-only beta, disable new signups in the hosted Supabase Auth settings and create/invite the initial users. Otherwise the app supports confirmed email signup, while all collections remain private. Configure production email delivery before relying on account email flows.
+For a small invite-only beta, disable new signups in the hosted Supabase Auth settings and create/invite the initial users. Otherwise the app supports confirmed email signup. Collections remain private until their owner explicitly saves Public visibility. Configure production email delivery before relying on account email flows.
 
 ### Password recovery email
 
@@ -65,6 +68,8 @@ The app accepts that code with `verifyOtp(type: 'recovery')`, then asks for a ne
 ### Photo privacy
 
 R2 public access must remain disabled. The Edge Function checks identity and ownership, validates file sizes and JPEG content, and generates signed GET URLs that expire after five minutes. URLs grant temporary access to anyone holding them, so do not share/log them. Images use memory caching and are cleared on sign-out. Native auth sessions use secure device storage; web preview sessions use sessionStorage.
+
+Public collection readers use a separate `public-media` endpoint. It checks visibility on every request, returns image bytes with no-store headers, and never gives visitors an R2 URL. Making a collection private blocks new public reads; it cannot remove screenshots or copies already downloaded. Shared metadata includes collection name, description, category name, and item names/photos. Item notes, acquired dates, owner IDs and storage keys are excluded. See [sharing setup](docs/COLLECTION-SHARING.md).
 
 ## Verification
 

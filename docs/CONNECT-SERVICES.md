@@ -2,7 +2,7 @@
 
 ## 1. Fill the ignored local configuration
 
-The frontend's `.env.local` already has the Supabase URL and publishable key. Leave `EXPO_PUBLIC_ENABLE_BACKEND` disabled until the schema and function are ready.
+The frontend's `.env.local` already has the Supabase URL and publishable key. Leave `EXPO_PUBLIC_ENABLE_BACKEND` disabled until the schema and functions are ready.
 
 In `supabase/.env.local`, fill:
 
@@ -39,11 +39,11 @@ npx supabase db push --dry-run
 npx supabase db push
 ```
 
-Apply all three files in timestamp order. The initial migration creates tables, relationships, indexes, owner policies and quotas; the second migration supports isolated photo-upload attempts; `202609160002_collectibles_hierarchy.sql` adds customizable categories and renames pins to items while preserving existing data and image keys. Deploy the updated item-based media function after this migration. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
+Apply all four files in timestamp order. The initial migration creates tables, relationships, indexes, owner policies and quotas; the second migration supports isolated photo-upload attempts; `202609160002_collectibles_hierarchy.sql` adds customizable categories and renames pins to items while preserving existing data and image keys. `202609160003_collection_sharing.sql` adds private-by-default visibility, acquired dates and the bounded public projection. Deploy both updated media functions after these migrations. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
 
 ## 4. Configure R2 privacy and browser access
 
-Keep **Public Development URL (`r2.dev`) disabled** and remove any public custom-domain access for this private bucket. The app reads images with temporary signed URLs.
+Keep **Public Development URL (`r2.dev`) disabled** and remove any public custom-domain access for this private bucket. Owners read images with temporary signed URLs. Public viewers use the visibility-checked proxy; the bucket remains private.
 
 Add this bucket CORS policy for local development, retaining any intentionally shared bucket configuration after review:
 
@@ -60,22 +60,24 @@ Add this bucket CORS policy for local development, retaining any intentionally s
 
 Add the real web origin before hosting a browser version, and keep it in `MEDIA_ALLOWED_ORIGINS` too. Mobile app requests do not need CORS. Uploads pass through the authenticated media function, so direct browser PUT permission is unnecessary.
 
-## 5. Deploy the media function
+## 5. Deploy the media functions
 
 After local tests and migration checks pass:
 
 ```powershell
 npx supabase secrets set --env-file supabase/.env.local --project-ref hoxesktykdwuvunhqnrp
 npx supabase functions deploy media --project-ref hoxesktykdwuvunhqnrp --use-api
+npx supabase functions deploy public-media --project-ref hoxesktykdwuvunhqnrp --use-api
 ```
 
-The function validates user sessions itself and rejects unauthenticated requests. It handles photos, signed read URLs, deletions and account cleanup. `--use-api` bundles on Supabase, so deployment does not require a running local Docker stack.
+The `media` function validates user sessions itself and rejects unauthenticated requests. It handles photos, signed read URLs, deletions and account cleanup. `public-media` allows anonymous image reads only for explicitly public collections after verifying membership and visibility. `--use-api` bundles on Supabase, so deployment does not require a running local Docker stack.
 
 ## 6. Configure Auth and test live behavior
 
 - Configure signups/invites, email confirmation, a real confirmation redirect and email delivery for testers.
 - Use the recovery-code email template in the root README. Match the hosted password minimum to the app's validation (at least eight characters).
 - Verify with two disposable test accounts: each can manage its own collection and cannot read/edit/sign/delete the other's records or photos.
+- Host the web app and set `EXPO_PUBLIC_WEB_URL` for native share links. Add the hosted origin to the server/bucket origin settings. Verify signed-out shared views exclude notes/dates and stop working after switching back to Private. See [sharing setup](COLLECTION-SHARING.md).
 - Check JPEG uploads, expired URLs, failed-upload retries, collection/account deletion and cleanup of abandoned attempts.
 - Schedule the cleanup script from a trusted server job runner, using server secrets. See `BACKEND.md`.
 - Generate client database types after migrations, enable `EXPO_PUBLIC_ENABLE_BACKEND=true` locally, and restart with `npx expo start --clear`.

@@ -283,7 +283,10 @@ test('connected sharing works anonymously, keeps notes private and revokes acces
   await expect(page.getByRole('button', { name: 'Collection: Private collection', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Collection: Shared collection', exact: true })).toHaveCount(0);
   await page.getByLabel('Item name').fill('Private item'); await page.getByRole('dialog').getByRole('button', { name: 'Add item', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open Private item', exact: true })).toBeVisible();
   await page.evaluate(() => sessionStorage.clear());
+  // Finish the owner document before measuring requests from the anonymous view.
+  await page.goto('about:blank');
   const ownerRequests: string[] = [];
   page.on('request', req => { if (/\/rest\/v1\/(categories|collections|items)(\?|$)/.test(req.url()) || /\/functions\/v1\/media$/.test(req.url())) ownerRequests.push(req.url()); });
   await page.goto(sharedUrl);
