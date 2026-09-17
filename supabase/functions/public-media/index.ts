@@ -1,7 +1,7 @@
 import { connectDatabase } from '../media/database.ts';
 import { createR2Store } from '../media/r2.ts';
 import { createPublicMediaHandler } from './http.ts';
-import { lookupPublicImage } from './lookup.ts';
+import { consumePublicRead, lookupPublicImage } from './lookup.ts';
 
 function required(name:string) {
   const value=Deno.env.get(name);
@@ -15,5 +15,6 @@ const store=createR2Store({accountId:required('R2_ACCOUNT_ID'),bucket:required('
 Deno.serve(createPublicMediaHandler({
   origins:(Deno.env.get('MEDIA_ALLOWED_ORIGINS')||'').split(',').map(value=>value.trim()).filter(Boolean),
   lookup:(collectionId,itemId,size)=>lookupPublicImage(db,collectionId,itemId,size),
+  consumeRead:()=>consumePublicRead(db),
   read:key=>store.get(key),
 }));

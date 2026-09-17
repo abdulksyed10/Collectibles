@@ -1,10 +1,10 @@
 # Collectibles
 
-A React Native + Expo frontend for a private collectibles app on Android and iOS, with a responsive web preview. **Current phase: backend integration.** You can explore and edit an isolated demo without API keys. Supabase and Cloudflare R2 source is prepared; the database migrations are live, while media deployment and real-account checks are still pending.
+A React Native + Expo app for private collectibles on Android and iOS, with a responsive web preview. The Supabase schema and both private R2 media functions are deployed. Live account and device acceptance checks remain before inviting testers.
 
 ## What you can try now
 
-- Sign-in, signup and recovery screens; real account operations wait for backend setup.
+- Sign-in, signup and recovery screens backed by Supabase once you create an account.
 - An explicit demo with six sample items across Pins, Pokémon Cards, and Bottle Caps, with no service calls.
 - Custom categories for any collectible type, collections within each category, and items within each collection.
 - Create and rename categories, move collections between categories, and delete empty categories.
@@ -47,7 +47,7 @@ Get them from Supabase Project Settings / API Keys or the Connect dialog. A publ
 
 ## Connect the backend
 
-**Next phase:** start with [the integration plan and database relationships](docs/INTEGRATION-PLAN.md). It covers tables, ownership, credentials, the tested backend retry fix, and live acceptance checks. Start with [Connect services](docs/CONNECT-SERVICES.md); the [backend reference](docs/BACKEND.md) contains migration/API/deployment details. The database migrations are applied; media deployment and live app acceptance remain pending. See [the deployment checkpoint](docs/DEPLOYMENT-CHECKPOINT.md).
+The initial integration is deployed. [Connect services](docs/CONNECT-SERVICES.md) records the remaining R2 browser-CORS and Auth settings; the [backend reference](docs/BACKEND.md) explains the API and limits. See the [deployment checkpoint](docs/DEPLOYMENT-CHECKPOINT.md) for completed checks and remaining live acceptance.
 
 Apply the checked-in migration to a new/empty project or review it against your existing schema before applying it. Do not reset a shared Supabase database. The frontend needs the tables and the deployed `media` function; supplying the project URL alone does not install them.
 
@@ -68,6 +68,8 @@ The app accepts that code with `verifyOtp(type: 'recovery')`, then asks for a ne
 ### Photo privacy
 
 R2 public access must remain disabled. The Edge Function checks identity and ownership, validates file sizes and JPEG content, and generates signed GET URLs that expire after five minutes. URLs grant temporary access to anyone holding them, so do not share/log them. Images use memory caching and are cleared on sign-out. Native auth sessions use secure device storage; web preview sessions use sessionStorage.
+
+Photo uploads are server-limited to 100 active photos per account, 20 attempts per hour and 50 per day per account, and 200 upload attempts per app per day. A 250 MiB lifetime allowance per account and a 1 GiB lifetime allowance for the app include failed or deleted uploads, so storage use cannot silently grow through retries. Anonymous shared-photo views are capped at 10,000 per day. An operator can pause owner uploads or public-photo reads in the private `media_limits` table. These limits are deliberately conservative for a small beta; see [the backend reference](docs/BACKEND.md#upload-and-read-budgets) before raising them.
 
 Public collection readers use a separate `public-media` endpoint. It checks visibility on every request, returns image bytes with no-store headers, and never gives visitors an R2 URL. Making a collection private blocks new public reads; it cannot remove screenshots or copies already downloaded. Shared metadata includes collection name, description, category name, and item names/photos. Item notes, acquired dates, owner IDs and storage keys are excluded. See [sharing setup](docs/COLLECTION-SHARING.md).
 

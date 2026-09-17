@@ -2,7 +2,7 @@
 
 ## 1. Fill the ignored local configuration
 
-The frontend's `.env.local` already has the Supabase URL and publishable key. Leave `EXPO_PUBLIC_ENABLE_BACKEND` disabled until the schema and functions are ready.
+The frontend's `.env.local` has the Supabase URL and publishable key. Set `EXPO_PUBLIC_ENABLE_BACKEND=true` only after the schema and functions are deployed, then restart Expo with a cleared cache.
 
 In `supabase/.env.local`, fill:
 
@@ -39,7 +39,7 @@ npx supabase db push --dry-run
 npx supabase db push
 ```
 
-Apply all four files in timestamp order. The initial migration creates tables, relationships, indexes, owner policies and quotas; the second migration supports isolated photo-upload attempts; `202609160002_collectibles_hierarchy.sql` adds customizable categories and renames pins to items while preserving existing data and image keys. `202609160003_collection_sharing.sql` adds private-by-default visibility, acquired dates and the bounded public projection. Deploy both updated media functions after these migrations. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
+Apply all five files in timestamp order. The initial migration creates tables, relationships, indexes, owner policies and quotas; the second migration supports isolated photo-upload attempts; `202609160002_collectibles_hierarchy.sql` adds customizable categories and renames pins to items while preserving existing data and image keys. `202609160003_collection_sharing.sql` adds private-by-default visibility, acquired dates and the bounded public projection. `202609160004_media_budgets.sql` adds private server counters: photo count, upload rate, byte reservations, public-photo reads and emergency pause switches. Deploy both updated media functions after these migrations. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
 
 ## 4. Configure R2 privacy and browser access
 
@@ -59,6 +59,8 @@ Add this bucket CORS policy for local development, retaining any intentionally s
 ```
 
 Add the real web origin before hosting a browser version, and keep it in `MEDIA_ALLOWED_ORIGINS` too. Mobile app requests do not need CORS. Uploads pass through the authenticated media function, so direct browser PUT permission is unnecessary.
+
+The current R2 token can read and write objects but cannot inspect or change bucket CORS, which is appropriate for the deployed function. The Cloudflare dashboard has confirmed there is no CORS policy, no custom domain and no public development URL. Add the rule through that dashboard or with a separate bucket-configuration token; do not broaden the app's R2 token.
 
 ## 5. Deploy the media functions
 
@@ -83,5 +85,9 @@ The `media` function validates user sessions itself and rejects unauthenticated 
 - Generate client database types after migrations, enable `EXPO_PUBLIC_ENABLE_BACKEND=true` locally, and restart with `npx expo start --clear`.
 
 Then test installed Android/iOS development builds, camera permissions and session persistence. Store publication follows after native testing, developer accounts, signing, icons, privacy/support pages and review.
+
+## Current project status
+
+For project `hoxesktykdwuvunhqnrp`, the five migrations, seven server secrets, and both Edge Functions are deployed. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. The bucket is empty and accepts authenticated R2 requests; its configuration/CORS still needs the Cloudflare dashboard check above. The local backend flag is now enabled. Create disposable accounts and complete the live checks in step 6 before inviting anyone.
 
 Provider references: [Supabase CLI migrations](https://supabase.com/docs/reference/cli/supabase-db-push), [function deployment](https://supabase.com/docs/guides/functions/deploy), [server secrets](https://supabase.com/docs/guides/functions/secrets), [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/).

@@ -5,7 +5,7 @@ select jsonb_build_object(
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where c.relkind = 'r' and (
       (n.nspname = 'public' and c.relname in ('categories', 'collections', 'items', 'item_images')) or
-      (n.nspname = 'private' and c.relname in ('owner_state', 'media_inventory'))
+      (n.nspname = 'private' and c.relname in ('owner_state', 'media_inventory', 'media_limits', 'media_budget_global', 'media_budget_owner', 'media_upload_attempts', 'public_media_reads'))
     )
   ),
   'owner_policies', (
@@ -41,6 +41,15 @@ select jsonb_build_object(
   'client_can_access_private_schema', has_schema_privilege('authenticated', 'private', 'USAGE'),
   'inventory_primary_key', (
     select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'private.media_inventory'::regclass and contype = 'p'
+  ),
+  'media_budget_controls', jsonb_build_object(
+    'limits_seeded', exists(select 1 from private.media_limits where singleton),
+    'uploads_enabled', (select uploads_enabled from private.media_limits where singleton),
+    'public_reads_enabled', (select public_reads_enabled from private.media_limits where singleton),
+    'authenticated_can_read_limits', has_table_privilege('authenticated', 'private.media_limits', 'SELECT'),
+    'authenticated_can_read_owner_budget', has_table_privilege('authenticated', 'private.media_budget_owner', 'SELECT'),
+    'authenticated_can_read_attempts', has_table_privilege('authenticated', 'private.media_upload_attempts', 'SELECT'),
+    'anonymous_can_read_public_media_counter', has_table_privilege('anon', 'private.public_media_reads', 'SELECT')
   ),
   'triggers', (
     select jsonb_agg(tgname order by tgname) from pg_trigger

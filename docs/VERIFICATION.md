@@ -60,3 +60,12 @@ Both migrations were applied to the authorized project through the CLI after ins
 - All three demo browser scenarios pass again against that final export. Sign-in remains disabled until service setup; demo editing, hierarchy, dates and sharing preview work without service calls. All 84 source/documentation files pass the secret scan; local environment files and generated artifacts remain ignored.
 - `npm audit` reports 11 moderate dependency-path findings, all from the existing `xcode`/`uuid` advisory GHSA-w5hq-g745-h8pq. The new date picker adds another tooling dependency path. No high or critical findings were reported, and no incompatible forced dependency change was applied.
 - R2 privacy/CORS, both hosted media functions, hosted share-link URL, Auth settings and live two-account acceptance remain pending. Public sharing is implemented in source and the demo has a read-only preview; it is not yet a deployed public service.
+
+## September 17 — live media budgets and deployment
+
+- Migration `202609160004_media_budgets.sql` was dry-run and applied to the authorized Supabase project. Live verification shows the seeded private budget controls are enabled and unreadable to anonymous/authenticated clients.
+- The server accepts 100 active photos per account, 20 attempts per account per hour, 50 per day, 200 per app per day, 250 MiB lifetime photo reservations per account, 1 GiB lifetime reservations for the app, and 10,000 anonymous public-photo reads per day. Local regression tests cover invalid uploads, account/app limits, R2 write prevention, lifetime reservation after deletion, private counter grants, and public-read ordering.
+- R2 authenticated access succeeds against the empty bucket. Cloudflare dashboard checks confirm public access, custom domains and the public development URL are disabled. No CORS policy is defined; add the narrow browser-read rule before inviting web users.
+- Seven ignored server values were uploaded to Edge Function secrets. Both `media` and `public-media` are ACTIVE. Credential-free requests returned the expected 401 and 400 boundaries, without user data.
+- TypeScript, Deno checks and all 60 local tests pass. The connected Expo web preview loads with enabled sign-in at `http://127.0.0.1:4174/`.
+- No live account, image or public collection has been created. Real two-account upload/read/delete/revocation checks, cleanup scheduling, Auth email settings, browser CORS and native-device checks still remain.

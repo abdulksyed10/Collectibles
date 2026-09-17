@@ -1,9 +1,12 @@
+import { MediaError } from '../media/validation.ts';
+
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createPublicMediaHandler(options:{
   origins:string[];
   lookup:(collectionId:string,itemId:string,size:'full'|'thumb')=>Promise<string|null>;
   read:(key:string)=>Promise<Uint8Array>;
+  consumeRead:()=>Promise<void>;
 }) {
   return async(request:Request):Promise<Response>=>{
     const origin=request.headers.get('origin');
@@ -28,10 +31,12 @@ export function createPublicMediaHandler(options:{
     try {
       const key=await options.lookup(collectionId,itemId,size);
       if(!key)return error(404,'not_found');
+      await options.consumeRead();
       const bytes=await options.read(key);
       headers.set('content-type','image/jpeg');
       return new Response(new Uint8Array(bytes),{status:200,headers});
-    } catch {
+    } catch (cause) {
+      if(cause instanceof MediaError)return error(cause.status,cause.code);
       return error(503,'service_unavailable');
     }
   };

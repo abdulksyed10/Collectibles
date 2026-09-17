@@ -48,6 +48,7 @@ before(async()=>{
     [itemId,owner,foreignItem,other]);
   handler=createPublicMediaHandler({origins:['https://app.example'],
     lookup:(c,i,size)=>lookupPublicImage({query},c,i,size),
+    consumeRead:async()=>{},
     read:async key=>{reads.push(key);return new Uint8Array([255,216,255,217]);}});
 });
 after(async()=>pg?.close());
@@ -140,6 +141,6 @@ test('public handler hides provider errors and limits CORS to read methods',asyn
   const preflight=await handler(new Request('https://example.test/public-media',{method:'OPTIONS',headers:{origin:'https://app.example'}}));
   assert.equal(preflight.headers.get('access-control-allow-methods'),'GET, OPTIONS');
   assert.equal((await handler(new Request('https://example.test/public-media',{method:'POST'}))).status,405);
-  const failed=createPublicMediaHandler({origins:[],lookup:async()=>{throw Error('secret SQL key');},read:async()=>new Uint8Array()});
+  const failed=createPublicMediaHandler({origins:[],lookup:async()=>{throw Error('secret SQL key');},consumeRead:async()=>{},read:async()=>new Uint8Array()});
   assert.equal((await (await failed(request())).text()).includes('secret'),false);
 });

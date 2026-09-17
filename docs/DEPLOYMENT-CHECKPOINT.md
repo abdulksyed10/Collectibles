@@ -17,13 +17,16 @@ The user authorized connecting the existing Supabase project and R2 bucket and r
 - Backend code reviewed; 38 local tests and TypeScript checks passed in the preceding stage.
 - Keep the frontend backend flag disabled until integration checks pass.
 
-## Stage 2 — media deployment (next; not started)
+## Stage 2 — media deployment (complete, September 17)
 
-- Verify the database connection and R2 credentials without printing secrets.
-- Inspect bucket privacy and CORS; configure the exact development origins.
-- Set hosted secrets from ignored `supabase/.env.local`.
-- Deploy `media` and `public-media` using the installed Supabase CLI; verify owner-action authentication and public photo visibility checks.
-- Arrange the cleanup job with the updated attempt-aware cleanup script.
+- Migration `202609160004_media_budgets.sql` was reviewed in a dry run and applied to the linked project. It adds private rate, byte, photo-count and public-read controls without modifying collection data.
+- Live verification confirms the limits row is seeded and enabled; anonymous/authenticated roles cannot read the limits, owner budgets, attempts or public-read counter.
+- The ignored server configuration passed its name-only checker. Seven server values were uploaded to Supabase secrets without printing their contents.
+- The empty R2 bucket accepted authenticated object requests. The S3 base URL rejected unsigned access. The Cloudflare dashboard confirms public access is disabled, there is no custom domain, and the public development URL is disabled. The current least-privilege R2 token cannot inspect CORS (HTTP 403); the dashboard confirms no CORS policy is defined, so browser signed-image reads need the narrow rule in `CONNECT-SERVICES.md` before web sharing is invited.
+- Both `media` and `public-media` functions are ACTIVE. A credential-free `media` request returned 401 and malformed `public-media` request returned 400, confirming the deployed code starts with its configured secrets.
+- The local backend flag is enabled in ignored `.env.local`; restart Expo with a cleared cache before trying the connected app.
+
+The deployed defaults are 100 photos/account, 20 attempts/account/hour, 50 attempts/account/day, 200 attempts/app/day, 250 MiB/account lifetime photo reservations, 1 GiB/app lifetime photo reservations, and 10,000 anonymous shared-photo reads/app/day. Failed and deleted uploads remain reserved to protect against late R2 writes. The controls are conservative app limits, not a guarantee of a provider-wide spending cap.
 
 ## Stage 1b — Collectibles hierarchy (live database complete)
 
@@ -63,4 +66,4 @@ The user authorized connecting the existing Supabase project and R2 bucket and r
 
 ## Current stopping point
 
-The generic Collectibles schema and sharing/date migration are live. The category/collection/item UI, private/public controls and read-only sharing source are implemented. Both media functions, R2 connection/privacy/CORS verification, hosted web URL, Auth setup, cleanup scheduling and live two-account tests are still pending. The frontend stays in demo mode. Resume with Stage 2 using the current item-based API and public-media endpoint; do not reapply or reset Stage 1/1b/1c.
+The generic Collectibles schema, sharing/date migration, media-budget migration and both media functions are live. The category/collection/item UI, private/public controls and read-only sharing source are implemented. Remaining work is Cloudflare browser CORS/public-domain confirmation, Auth/email configuration, cleanup scheduling, a hosted share URL, and disposable two-account/device acceptance. Do not reapply or reset completed migrations.

@@ -23,7 +23,7 @@ export async function sweepMedia(db:Database,store:ObjectStore,limit=100):Promis
       await store.remove([row.full_key,row.thumb_key]);
       // Retire this exact attempt even when its item has a different active
       // image. A stalled request may not resume a swept reservation.
-      await tx.query(`UPDATE private.media_inventory SET last_swept_at=now(),deleted_at=coalesce(deleted_at,now())
+      await tx.query(`UPDATE private.media_inventory SET last_swept_at=now(),deleted_at=coalesce(deleted_at,now()),budget_status='retired'
         WHERE attempt_id=$1`,[candidate.attempt_id]);
       return true;
     });
