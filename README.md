@@ -8,7 +8,7 @@ A React Native + Expo app for private collectibles on Android and iOS, with a re
 - An explicit demo with six sample items across Pins, Pokémon Cards, and Bottle Caps, with no service calls.
 - Custom categories for any collectible type, collections within each category, and items within each collection.
 - Create and rename categories, move collections between categories, and delete empty categories.
-- Private/Public tabs for your own collections, category/collection filters, search, and paginated galleries.
+- A private workspace for your own collections plus a paginated Public tab for collections people choose to share.
 - Collections start private. Explicitly make one public to share a read-only link; notes and acquired dates stay private.
 - Collection acquired dates default to today and can be changed.
 - Camera/library photos compressed to JPEG with a separate thumbnail.

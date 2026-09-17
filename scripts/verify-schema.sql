@@ -36,6 +36,10 @@ select jsonb_build_object(
   'shared_projection_security_definer', (
     select prosecdef from pg_proc where oid = 'public.get_shared_collection(uuid,integer)'::regprocedure
   ),
+  'anonymous_can_use_public_catalog', has_function_privilege('anon', 'public.list_public_collections(integer)', 'EXECUTE'),
+  'public_catalog_security_definer', (
+    select prosecdef from pg_proc where oid = 'public.list_public_collections(integer)'::regprocedure
+  ),
   'anonymous_can_write_collections', has_table_privilege('anon', 'public.collections', 'INSERT,UPDATE,DELETE'),
   'client_can_write_image_keys', has_column_privilege('authenticated', 'public.item_images', 'full_key', 'INSERT,UPDATE'),
   'client_can_access_private_schema', has_schema_privilege('authenticated', 'private', 'USAGE'),

@@ -1,6 +1,6 @@
 import { requireClient } from '../lib/supabase';
 import { escapeSearch, validateCategory, validateCollection, validateCollectionSettings, validateItem } from '../domain/validation';
-import type { Category, Collection, CollectionRepository, Item, ItemImage, SharedCollectionPage } from '../domain/models';
+import type { Category, Collection, CollectionRepository, Item, ItemImage, PublicCollectionPage, SharedCollectionPage } from '../domain/models';
 import { todayLocalDate } from '../domain/dates';
 import { isCollectionId, validateSharedPage } from '../domain/sharing';
 const PAGE_SIZE = 24;
@@ -63,6 +63,12 @@ export const repository: CollectionRepository = {
     if (error) throw new Error('Unable to load this collection. Try again.');
     if (!data) throw new Error('Collection unavailable.');
     return data as SharedCollectionPage;
+  },
+  async listPublicCollections(page) {
+    validateSharedPage(page);
+    const { data, error } = await requireClient().rpc('list_public_collections', { p_page: page });
+    if (error || !data) throw new Error('Unable to load public collections. Try again.');
+    return data as PublicCollectionPage;
   },
   async saveItem(draft, id) {
     const value = { ...validateItem(draft), collection_id: draft.collectionId };

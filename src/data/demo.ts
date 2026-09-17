@@ -75,6 +75,27 @@ export function createDemoRepository(): CollectionRepository {
         total: found.length, hasMore: (page + 1) * 24 < found.length,
       };
     },
+    async listPublicCollections(page) {
+      validateSharedPage(page);
+      const found = collections.filter(collection => collection.visibility === 'public').sort((a, b) => b.created_at.localeCompare(a.created_at));
+      return {
+        collections: found.slice(page * 24, (page + 1) * 24).map(collection => {
+          const collectionItems = items.filter(item => item.collection_id === collection.id);
+          const cover = collectionItems.find(item => images.has(item.id));
+          return {
+            id: collection.id,
+            name: collection.name,
+            description: collection.description,
+            categoryName: categories.find(category => category.id === collection.category_id)?.name ?? '',
+            itemCount: collectionItems.length,
+            coverItemId: cover?.id ?? null,
+            isOwner: true,
+          };
+        }),
+        total: found.length,
+        hasMore: (page + 1) * 24 < found.length,
+      };
+    },
     async saveItem(draft, id) {
       const value = { ...validateItem(draft), collection_id: draft.collectionId, updated_at: new Date().toISOString() };
       if (!collections.some(c => c.id === draft.collectionId)) throw new Error('Choose a collection first.');

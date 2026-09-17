@@ -23,6 +23,15 @@ async function fakeBackend(page: Page, options: { failPhoto?: boolean; failLogou
       const matching = items.filter(i => i.collection_id === collection.id);
       await route.fulfill({ json: { collection: { id: collection.id, name: collection.name, description: collection.description, categoryName: categories.find(c => c.id === collection.category_id)?.name }, items: matching.slice(p_page * 24, (p_page + 1) * 24).map(i => ({ id: i.id, title: i.title, hasPhoto: imageIds.has(i.id) })), total: matching.length, hasMore: matching.length > (p_page + 1) * 24 } }); return;
     }
+    if (table === 'list_public_collections') {
+      const { p_page = 0 } = req.postDataJSON();
+      const shared = collections.filter(collection => collection.visibility === 'public');
+      const card = shared.slice(p_page * 24, (p_page + 1) * 24).map(collection => {
+        const matching = items.filter(item => item.collection_id === collection.id);
+        return { id: collection.id, name: collection.name, description: collection.description, categoryName: categories.find(category => category.id === collection.category_id)?.name ?? '', itemCount: matching.length, coverItemId: matching.find(item => imageIds.has(item.id))?.id ?? null, isOwner: true };
+      });
+      await route.fulfill({ json: { collections: card, total: shared.length, hasMore: shared.length > (p_page + 1) * 24 } }); return;
+    }
     const id = url.searchParams.get('id')?.replace('eq.','');
     if (req.method() === 'POST') { const value = req.postDataJSON(); const row = {...value,id:`00000000-0000-4000-8000-${String(++sequence).padStart(12,'0')}`,owner_id:owner,created_at:now,updated_at:now}; rows.push(row); await route.fulfill({json:row}); return; }
     if (req.method() === 'DELETE') { if (collections.some(c => c.category_id === id)) { await route.fulfill({ status: 409, json: { code: '23503', message: 'Category has collections' } }); return; } categories = categories.filter(c => c.id !== id); await route.fulfill({ status: 204 }); return; }
@@ -221,7 +230,8 @@ test('demo uses plain mobile controls, private defaults, editable dates and a re
   expect(firstItem && firstItem.y < 600).toBeTruthy();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   await page.getByRole('tab', { name: 'Public collections' }).click();
-  await expect(page.getByText('No public collections', { exact: true })).toBeVisible();
+  await expect(page.getByText('No public collections yet', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Private collections' }).click();
   await page.getByRole('button', { name: 'New collection', exact: true }).first().click();
   const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
   await expect(page.getByLabel('Acquired date', { exact: true })).toHaveValue(today);
@@ -239,6 +249,13 @@ test('demo uses plain mobile controls, private defaults, editable dates and a re
   await page.getByRole('button', { name: 'Visibility: Public', exact: true }).click();
   await page.getByRole('button', { name: 'Save collection', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Public collections' })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Private collections' }).click();
+  await page.getByRole('tab', { name: 'Public collections' }).click();
+  await expect(page.getByText('Dated collection', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'View collection', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'View Shared sample', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Manage', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Share collection', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Preview public view' }).click();
   await expect(page.getByRole('button', { name: 'View Shared sample', exact: true })).toBeVisible();

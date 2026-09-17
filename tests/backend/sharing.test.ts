@@ -88,6 +88,30 @@ test('migration defaults and owner-only date/visibility writes',async()=>{
   });
 });
 
+test('anonymous visitors can list safe public collection cards',async()=>{
+  await asRole('anon',null,async()=>{
+    const page=(await pg.query<{list_public_collections:any}>('SELECT list_public_collections($1)',[0])).rows[0].list_public_collections;
+    assert.deepEqual(Object.keys(page).sort(),['collections','hasMore','total']);
+    assert.equal(page.total,1);
+    assert.equal(page.hasMore,false);
+    assert.deepEqual(page.collections,[{
+      id:publicId,
+      name:'Shared',
+      description:'Safe description',
+      categoryName:'Pins',
+      itemCount:1,
+      coverItemId:itemId,
+      isOwner:false,
+    }]);
+    assert.deepEqual(Object.keys(page.collections[0]).sort(),['categoryName','coverItemId','description','id','isOwner','itemCount','name']);
+    assert.equal((await pg.query<{list_public_collections:any}>('SELECT list_public_collections($1)',[21])).rows[0].list_public_collections,null);
+  });
+  await asRole('authenticated',owner,async()=>{
+    const page=(await pg.query<{list_public_collections:any}>('SELECT list_public_collections($1)',[0])).rows[0].list_public_collections;
+    assert.equal(page.collections[0].isOwner,true);
+  });
+});
+
 test('anonymous metadata is bounded and excludes owner, notes, date, and keys',async()=>{
   await asRole('anon',null,async()=>{
     await assert.rejects(pg.query('SELECT * FROM collections'),/permission denied/);

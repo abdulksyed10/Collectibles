@@ -2,13 +2,13 @@
 
 ## In the app
 
-The Private and Public tabs show the signed-in owner's collections. Categories still describe collectible types such as Pins, Pokémon Cards, Bottle Caps or Boots. Each category can contain multiple collections, and each collection contains items.
+The Private tab shows the signed-in owner's private collections. The Public tab is a paginated catalog of collections people have chosen to share. Categories still describe collectible types such as Pins, Pokémon Cards, Bottle Caps or Boots. Each category can contain multiple collections, and each collection contains items. Owners can use Manage on their own public card to edit its items or visibility.
 
-New collections default to Private, including when created from the Public tab. Their acquired date defaults to the device's current local date. The editor provides a calendar and Today action. Dates are saved as calendar dates without a time zone. Existing collections receive their original creation date during migration.
+New collections are created from the Private tab and default to Private. Their acquired date defaults to the device's current local date. The editor provides a calendar and Today action. Dates are saved as calendar dates without a time zone. Existing collections receive their original creation date during migration.
 
 To share, edit a collection, select Public and save. Share collection opens the device share menu or copies the web link. Preview public view shows the same read-only content. The demo only supports the preview because its temporary data has no public server.
 
-Visitors see collection name, description, category name, and item names/photos. Notes and acquired dates remain private. New items are offered collections from the selected Private/Public tab. Moving an existing item into a public collection also publishes its name/photo; the editor labels the destination visibility.
+Visitors see collection name, description, category name, item names, and public photos. Notes, acquired dates, owner IDs and storage keys remain private. New items can be added while managing one of your own collections. Moving an existing item into a public collection also publishes its name/photo; the editor labels the destination visibility.
 
 Switching back to Private blocks subsequent public reads. Open viewers recheck availability periodically and when returning to the foreground. Previously downloaded images, screenshots and other copies cannot be recalled.
 

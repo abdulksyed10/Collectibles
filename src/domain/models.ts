@@ -14,6 +14,16 @@ export type SharedCollectionPage = {
   total: number;
   hasMore: boolean;
 };
+export type PublicCollectionCard = {
+  id: string;
+  name: string;
+  description: string;
+  categoryName: string;
+  itemCount: number;
+  coverItemId: string | null;
+  isOwner: boolean;
+};
+export type PublicCollectionPage = { collections: PublicCollectionCard[]; total: number; hasMore: boolean };
 export interface CollectionRepository {
   listCategories(): Promise<Category[]>;
   saveCategory(draft: CategoryDraft, id?: string): Promise<Category>;
@@ -22,6 +32,7 @@ export interface CollectionRepository {
   saveCollection(draft: CollectionDraft, id?: string): Promise<Collection>;
   listItems(options: { categoryId?: string; collectionId?: string; search: string; page: number; visibility?: CollectionVisibility }): Promise<ItemPage>;
   readSharedCollection(collectionId: string, page: number): Promise<SharedCollectionPage>;
+  listPublicCollections(page: number): Promise<PublicCollectionPage>;
   saveItem(draft: ItemDraft, id?: string): Promise<Item>;
   readImages(itemIds: string[]): Promise<ItemImage[]>;
   uploadPhoto(itemId: string, photo: PreparedPhoto): Promise<void>;

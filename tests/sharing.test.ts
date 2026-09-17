@@ -52,3 +52,20 @@ test('public projection omits private fields, scopes pagination, and is revoked 
   await repo.saveCollection({ name: 'Travel', description: '', categoryId: 'pins', visibility: 'private' }, 'adventures');
   await assert.rejects(repo.readSharedCollection('adventures', 0), /unavailable/i);
 });
+
+test('public catalog returns only shared collection card fields', async () => {
+  const repo = createDemoRepository();
+  await repo.saveCollection({ name: 'Travel', description: 'Trips', categoryId: 'pins', visibility: 'public' }, 'adventures');
+  const page = await repo.listPublicCollections(0);
+  assert.equal(page.total, 1);
+  assert.equal(page.hasMore, false);
+  assert.deepEqual(page.collections, [{
+    id: 'adventures',
+    name: 'Travel',
+    description: 'Trips',
+    categoryName: 'Pins',
+    itemCount: 2,
+    coverItemId: 'sample-0',
+    isOwner: true,
+  }]);
+});
