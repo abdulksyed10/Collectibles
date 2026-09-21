@@ -12,7 +12,7 @@ major_version = 17
 [auth]
 enabled = true
 site_url = "http://localhost:8081"
-additional_redirect_urls = ["pinkeeper://**"]
+additional_redirect_urls = ["collectibles://**"]
 enable_signup = true
 minimum_password_length = 10
 

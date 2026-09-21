@@ -142,11 +142,23 @@ test('mobile collector can create, photograph, edit, search and delete a private
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBeTruthy(); expect(errors).toEqual([]);
   await page.screenshot({path:'.artifacts/mobile-library.png',fullPage:true});
 });
-test('desktop entry renders and rejects invalid login input without calling the backend', async ({page}) => {
+test('desktop entry rejects invalid email and short signup passwords before authentication', async ({page}) => {
+  let signupRequests = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/auth/v1/signup')) signupRequests++; });
   await page.setViewportSize({width:1365,height:900}); await fakeBackend(page); await page.goto('/');
   await expect(page.getByText('Every find has',{exact:false})).toBeVisible();
   await page.screenshot({path:'.artifacts/desktop-signin.png',fullPage:true});
   await page.getByRole('button',{name:'Sign in',exact:true}).click(); await expect(page.getByText('Enter a valid email address.')).toBeVisible();
+  await page.getByRole('button', { name: 'Create your account', exact: true }).click();
+  await page.getByLabel('Email address').fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill('ninechars');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.getByText('Use a password with at least 10 characters.')).toBeVisible();
+  expect(signupRequests).toBe(0);
+  await page.getByLabel('Password', { exact: true }).fill('tenletters');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New collection', exact: true }).first()).toBeVisible();
+  expect(signupRequests).toBe(1);
 });
 
 test('closing an existing item after a failed photo upload refreshes its saved details', async ({ page }) => {

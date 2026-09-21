@@ -114,6 +114,8 @@ To preview the production web export: `npm run preview`, then visit `http://127.
 
 ## App-store builds
 
+See [the beta launch checklist](docs/BETA-LAUNCH.md) for current blockers, hosted-service setup and device acceptance before inviting testers.
+
 The repository contains an EAS build skeleton. Before the first store build, choose unique Android package/iOS bundle identifiers, set them in `app.json`, associate your Expo project, and configure the public client values and backend opt-in flag in the appropriate EAS environment after integration. Supply store signing credentials through EAS/provider tooling, never Git.
 
 ```sh

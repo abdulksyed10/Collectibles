@@ -6,15 +6,16 @@ permissions:
   contents: read
 jobs:
   app:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
+      EXPO_NO_DOTENV: '1'
       EXPO_PUBLIC_ENABLE_BACKEND: 'true'
       PLAYWRIGHT_BACKEND_FIXTURE: 'true'
       EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fixture_not_a_secret
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.13.1'
           cache: npm
@@ -23,7 +24,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npx expo install --check
-      - run: npm run build:web
+      - name: Compile web, Android and iOS bundles
+        run: npx expo export --platform all --clear --max-workers 2
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - name: Build frontend without credentials
@@ -36,16 +38,17 @@ jobs:
         run: npm run test:e2e -- --grep demo
         env:
           PLAYWRIGHT_BACKEND_FIXTURE: 'false'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-failure
           path: test-results/
           retention-days: 7
+          if-no-files-found: ignore
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x

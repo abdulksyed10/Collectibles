@@ -1,8 +1,8 @@
-# Deployment checkpoint — September 16, 2026
+# Deployment checkpoint — updated September 21, 2026
 
 ## Scope and authorization
 
-The user authorized connecting the existing Supabase project and R2 bucket and requested resumable stages. They then broadened the app to Collectibles: customizable collectible types (Pins, Pokémon Cards, Bottle Caps, Boots, etc.), with collections and items within them. This checkpoint records that completed schema/UI stage; media integration remains next.
+The user authorized connecting the existing Supabase project and R2 bucket and requested resumable stages. They then broadened the app to Collectibles: customizable collectible types (Pins, Pokémon Cards, Bottle Caps, Boots, etc.), with collections and items within them. Entries below are historical stage records; the current stopping point and [beta launch checklist](BETA-LAUNCH.md) describe remaining work.
 
 ## Stage 1 — database setup (complete)
 
@@ -52,7 +52,7 @@ The deployed defaults are 100 photos/account, 20 attempts/account/hour, 50 attem
 
 - Credentials are only in ignored `.env.local`, `supabase/.env.local`, and the CLI credential store. Never include their values in logs, Git or chat.
 - Do not reset the remote database or rerun already recorded migrations. Inspect migration history first when resuming.
-- GitHub publishing remains separate; do not infer permission from a remote URL when the earlier destination question is unresolved.
+- GitHub publishing was authorized and the project has been pushed to `abdulksyed10/Collectibles`, branch `codex/private-pin-mvp`. Keep secrets and generated builds excluded.
 - See `docs/CONNECT-SERVICES.md` for operator commands and `docs/BACKEND.md` for backend behavior.
 
 ## Stage 1c — collection sharing and acquired dates (live database complete)
@@ -66,4 +66,6 @@ The deployed defaults are 100 photos/account, 20 attempts/account/hour, 50 attem
 
 ## Current stopping point
 
-The generic Collectibles schema, sharing/date migration, media-budget migration and both media functions are live. The category/collection/item UI, private/public controls and read-only sharing source are implemented. Remaining work is Auth/email configuration, cleanup scheduling, an exact hosted web origin and share URL, and disposable two-account/device acceptance. Do not reapply or reset completed migrations.
+All six migrations, including `202609170005_public_catalog.sql`, and both media functions were deployed during integration. Real user-created accounts/uploads exist; the earlier empty-project checks are historical. The Public tab now lists public collections across accounts. Do not reset the database or modify existing users for acceptance tests.
+
+The September 21 readiness review found missing mobile app identifiers/EAS association, a hosted web origin/share URL, native installation evidence, public-content reporting/blocking, published privacy/support/deletion pages, and cleanup scheduling. Hosted Auth/email settings still need verification. See [BETA-LAUNCH.md](BETA-LAUNCH.md) for ordered stages and device acceptance; [VERIFICATION.md](VERIFICATION.md) records checks completed locally.

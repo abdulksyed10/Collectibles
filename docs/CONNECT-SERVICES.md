@@ -77,7 +77,7 @@ The `media` function validates user sessions itself and rejects unauthenticated 
 ## 6. Configure Auth and test live behavior
 
 - Configure signups/invites, email confirmation, a real confirmation redirect and email delivery for testers.
-- Use the recovery-code email template in the root README. Match the hosted password minimum to the app's validation (at least eight characters).
+- Use the recovery-code email template in the root README. Match the hosted password minimum to the app and local Auth configuration (at least ten characters).
 - Verify with two disposable test accounts: each can manage its own collection and cannot read/edit/sign/delete the other's records or photos.
 - Host the web app and set `EXPO_PUBLIC_WEB_URL` for native share links. Add the hosted origin to the server/bucket origin settings. Verify the Public tab shows another test account's public collection and its photo, while excluding notes, dates, owner IDs and storage keys. Switch it back to Private and verify it disappears from the catalog and shared links. See [sharing setup](COLLECTION-SHARING.md).
 - Check JPEG uploads, expired URLs, failed-upload retries, collection/account deletion and cleanup of abandoned attempts.
@@ -88,6 +88,6 @@ Then test installed Android/iOS development builds, camera permissions and sessi
 
 ## Current project status
 
-For project `hoxesktykdwuvunhqnrp`, the six migrations, seven server secrets, and both Edge Functions are deployed. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. The bucket is empty and accepts authenticated R2 requests; it has no public development URL or custom domain, and its local browser CORS rule is configured. The local backend flag is enabled. Create disposable accounts and complete the live checks in step 6 before inviting anyone.
+For project `hoxesktykdwuvunhqnrp`, the six migrations, seven server secrets, and both Edge Functions were deployed during integration. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. Real accounts and uploaded photos now exist. R2 was verified private with local browser CORS configured. The local backend flag is enabled. Use disposable data for the remaining acceptance checks; do not reset the project. See [the beta launch checklist](BETA-LAUNCH.md) for hosted origins, email, moderation, cleanup and signed-device testing still needed.
 
 Provider references: [Supabase CLI migrations](https://supabase.com/docs/reference/cli/supabase-db-push), [function deployment](https://supabase.com/docs/guides/functions/deploy), [server secrets](https://supabase.com/docs/guides/functions/secrets), [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/).

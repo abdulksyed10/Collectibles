@@ -1,6 +1,6 @@
 # Frontend verification — September 15, 2026
 
-This file is chronological. The latest completed stage and remaining live work are in [the deployment checkpoint](DEPLOYMENT-CHECKPOINT.md).
+This file is chronological. The latest completed stage and remaining live work are in [the deployment checkpoint](DEPLOYMENT-CHECKPOINT.md) and [beta launch checklist](BETA-LAUNCH.md).
 
 ## Passed locally
 
@@ -69,3 +69,15 @@ Both migrations were applied to the authorized project through the CLI after ins
 - Seven ignored server values were uploaded to Edge Function secrets. Both `media` and `public-media` are ACTIVE. Credential-free requests returned the expected 401 and 400 boundaries, without user data.
 - TypeScript, Deno checks and all 60 local tests pass. The connected Expo web preview loads with enabled sign-in at `http://127.0.0.1:4173/`; the deployed media function accepts its credential-free browser CORS preflight (204).
 - No live account, image or public collection has been created. Real two-account upload/read/delete/revocation checks, cleanup scheduling, Auth email settings, browser CORS and native-device checks still remain.
+
+## September 21 — CI repair and beta readiness
+
+- Retrieved the failed GitHub job log: the configuration-check script could not resolve Node built-in types. Added direct Node 22 type definitions and explicit TypeScript types; local typecheck now exits successfully. Updated GitHub actions to v7 and fixed the Ubuntu runner at 24.04. Missing browser artifacts no longer create a warning when failure occurs before tests.
+- Updated Expo, image picker and image manipulator to the compatible SDK 57 patch releases. The registry-backed Expo dependency check passes. The dependency audit still reports 11 moderate paths through the xcode/uuid advisory, with no high or critical findings; no forced major downgrade was applied.
+- All 62 domain, SQL/privacy/quota, media and secret-rule tests pass after the dependency changes.
+- Web, Android and iOS Hermes exports pass using dummy public configuration with dotenv disabled. Native export required permission to execute the Hermes compiler outside the Windows sandbox. This verifies compilation, not signed builds or installation.
+- All 13 Chrome browser scenarios pass against the isolated fixture export. Browser tests now start their own server on port 4174 rather than reusing a potentially stale connected preview on 4173. PREVIEW_DIR and PLAYWRIGHT_PORT allow isolated test exports.
+- A separate export with no client credentials and the backend disabled passes all three demo scenarios. Generated exports and both local environment files remain ignored; the staged source/documentation secret scan passes.
+- A signup regression reproduced the old nine-character acceptance; the corrected test proves it is rejected before an Auth request and ten characters can proceed. Signup/recovery now match the local Auth minimum. Corrected the old pinkeeper redirect scheme to collectibles in local Supabase configuration; hosted Auth settings were not changed.
+- Corrected the login privacy description to acknowledge optional sharing. CI now compiles all three platform bundles before browser tests and builds the credential-free demo separately with a cleared Metro cache.
+- No deployed database, R2 objects, users or hosted Auth settings were modified in this readiness review. Store identities/signing, hosted web/email setup, public-content moderation, cleanup scheduling and real-device acceptance remain in BETA-LAUNCH.md.
