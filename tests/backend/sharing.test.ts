@@ -74,8 +74,9 @@ test('migration backfills existing collection dates from creation day',async()=>
 
 test('migration defaults and owner-only date/visibility writes',async()=>{
   const row=(await pg.query<{visibility:string;acquired_on:string}>('SELECT visibility,acquired_on FROM collections WHERE id=$1',[publicId])).rows[0];
+  const databaseToday=(await pg.query<{today:string}>('SELECT current_date::text AS today')).rows[0].today;
   assert.equal(row.visibility,'private');
-  assert.equal(new Date(row.acquired_on).toISOString().slice(0,10),new Date().toISOString().slice(0,10));
+  assert.equal(new Date(row.acquired_on).toISOString().slice(0,10),databaseToday);
   await asRole('authenticated',other,async()=>{
     assert.equal((await pg.query('UPDATE collections SET visibility=$1 WHERE id=$2 RETURNING id',['public',publicId])).rows.length,0);
   });

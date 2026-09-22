@@ -233,6 +233,25 @@ test('demo supports custom collectible types, collection moves and empty categor
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
 
+test('demo search can be cleared without overlapping the Add item button on small phones', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Try the demo', exact: true }).click();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.getByLabel('Search items').fill('no-such-item');
+    await expect(page.getByText('No matching items', { exact: true })).toBeVisible();
+    const clear = page.getByRole('button', { name: 'Clear search', exact: true }).first();
+    const add = page.getByRole('button', { name: 'Add item', exact: true }).first();
+    const clearBox = (await clear.boundingBox())!;
+    const addBox = (await add.boundingBox())!;
+    expect(clearBox.x + clearBox.width).toBeLessThanOrEqual(width);
+    expect(clearBox.x + clearBox.width <= addBox.x || clearBox.y + clearBox.height <= addBox.y).toBeTruthy();
+    await page.screenshot({ path: `.artifacts/mobile-search-${width}.png`, fullPage: true });
+    await clear.click();
+    await expect(page.getByLabel('Search items')).toHaveValue('');
+  }
+});
+
 test('demo uses plain mobile controls, private defaults, editable dates and a read-only public preview', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto('/'); await page.getByRole('button', { name: 'Try the demo', exact: true }).click();
