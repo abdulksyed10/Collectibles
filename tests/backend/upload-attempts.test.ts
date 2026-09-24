@@ -50,7 +50,7 @@ before(async () => {
   await pg.query('INSERT INTO private.media_inventory(pin_id,owner_id,full_key,thumb_key) VALUES ($1,$2,$3,$4)', [legacy, owner, ...keys]);
   await pg.query('INSERT INTO pin_images(pin_id,owner_id,full_key,thumb_key,bytes) VALUES ($1,$2,$3,$4,$5)', [legacy, owner, ...keys, blue.length * 2]);
   keys.forEach(key => objects.set(key, blue));
-  await applyMigrations(pg, '202609150001_private_pins.sql');
+  await applyMigrations(pg, '202609150001_private_pins.sql', '202609240001_public_image_lookup_bridge.sql');
   const session = (client: { query: Function }): Session => ({ query: async <T extends Record<string, unknown>>(sql: string, params: unknown[] = []) => (await client.query(sql, params)).rows as T[] });
   db = { ...session(pg), transaction: run => pg.transaction(tx => run(session(tx))) };
   media = createMediaService(db, store, async id => { await pg.query('DELETE FROM auth.users WHERE id=$1', [id]); });

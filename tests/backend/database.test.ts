@@ -24,7 +24,7 @@ before(async () => {
     GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated;
     INSERT INTO auth.users VALUES ('${a}'), ('${b}');
   `);
-  await applyMigrations(db);
+  await applyMigrations(db, '', '202609240001_public_image_lookup_bridge.sql');
   categoryA = (await db.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1', [a])).rows[0].id;
   categoryB = (await db.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1', [b])).rows[0].id;
 });

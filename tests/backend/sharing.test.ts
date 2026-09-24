@@ -31,7 +31,7 @@ before(async()=>{
     GRANT USAGE ON SCHEMA auth TO anon, authenticated;
     GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated;
     INSERT INTO auth.users VALUES ('${owner}'),('${other}');`);
-  await applyMigrations(pg);
+  await applyMigrations(pg, '', '202609240001_public_image_lookup_bridge.sql');
   const category=(await pg.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1',[owner])).rows[0].id;
   const otherCategory=(await pg.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1',[other])).rows[0].id;
   await pg.query(`INSERT INTO collections(id,owner_id,category_id,name,description,created_at)

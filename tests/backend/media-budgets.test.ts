@@ -36,7 +36,7 @@ before(async () => {
     CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT null::uuid $$;
     INSERT INTO auth.users VALUES ('${owner}'),('${other}');`);
-  await applyMigrations(pg);
+  await applyMigrations(pg, '', '202609240001_public_image_lookup_bridge.sql');
   const category = (await pg.query<{ id: string }>('SELECT id FROM public.categories WHERE owner_id=$1', [owner])).rows[0].id;
   const otherCategory = (await pg.query<{ id: string }>('SELECT id FROM public.categories WHERE owner_id=$1', [other])).rows[0].id;
   await pg.query('INSERT INTO public.collections(id,owner_id,category_id,name) VALUES ($1,$2,$3,$4),($5,$6,$7,$8)', [collection, owner, category, 'Budget test', otherCollection, other, otherCategory, 'Other budget test']);

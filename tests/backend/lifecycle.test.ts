@@ -29,7 +29,7 @@ before(async()=>{
     CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT null::uuid $$;
     INSERT INTO auth.users VALUES ('${a}'),('${b}');`);
-  await applyMigrations(pg);
+  await applyMigrations(pg, '', '202609240001_public_image_lookup_bridge.sql');
   categoryA=(await pg.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1',[a])).rows[0].id;
   categoryB=(await pg.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1',[b])).rows[0].id;
   const session=(client:{query:Function}):Session=>({query:async<T extends Record<string,unknown>>(sql:string,params:unknown[]=[]) => (await client.query(sql,params)).rows as T[]});
