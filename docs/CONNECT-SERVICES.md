@@ -39,7 +39,7 @@ npx supabase db push --dry-run
 npx supabase db push
 ```
 
-The previous six migrations are already present. The current app requires the staged collection-first upgrade in `202609240001_public_image_lookup_bridge.sql` and `202609240002_collection_first.sql`. Do not run a blanket `db push` while the previous app can write: follow the maintenance sequence in [BACKEND.md](BACKEND.md), including the write pause, bridge-aware function deployment, metadata backup, and post-migration acceptance checks. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
+The previous six migrations and the staged collection-first upgrade (`202609240001_public_image_lookup_bridge.sql` and `202609240002_collection_first.sql`) are applied to the linked project. The upgrade used the maintenance sequence in [BACKEND.md](BACKEND.md): a metadata backup, write pause, bridge-aware function deployment, transactional hierarchy migration, and restored mutations. Preserve this recorded history; do not reset the project or rerun migrations. Continue with post-migration acceptance checks using disposable data.
 
 ## 4. Configure R2 privacy and browser access
 
@@ -88,6 +88,6 @@ Then test installed Android/iOS development builds, camera permissions and sessi
 
 ## Current project status
 
-For project `hoxesktykdwuvunhqnrp`, the six previous migrations, seven server secrets, and both Edge Functions were deployed during integration. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. Real accounts and uploaded photos now exist. R2 was verified private with local browser CORS configured. The collection-first bridge and hierarchy migration remain pending, so new accounts cannot use the redesigned app until the staged upgrade is complete. Use disposable data for acceptance checks; do not reset the project. See [the beta launch checklist](BETA-LAUNCH.md) for hosted origins, email, moderation, cleanup and signed-device testing still needed.
+For project `hoxesktykdwuvunhqnrp`, all eight migrations, the server secrets, and both Edge Functions are deployed. Credential-free endpoint checks return 401 from `media` without a session and 400 from `public-media` with an invalid request. Real accounts and uploaded photos exist. R2 is verified private with local browser CORS configured. The collection-first bridge and hierarchy migration completed after an ignored local metadata backup; the required legacy collection column is absent, item image metadata is preserved, and mutations are restored. Use disposable data for acceptance checks; do not reset the project. See [the beta launch checklist](BETA-LAUNCH.md) for hosted origins, email, moderation, cleanup and signed-device testing still needed.
 
 Provider references: [Supabase CLI migrations](https://supabase.com/docs/reference/cli/supabase-db-push), [function deployment](https://supabase.com/docs/guides/functions/deploy), [server secrets](https://supabase.com/docs/guides/functions/secrets), [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/).

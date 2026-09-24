@@ -1,13 +1,13 @@
 # Deployment checkpoint — updated September 24, 2026
 
-> **Current redesign status — September 24, 2026:** `202609240001_public_image_lookup_bridge.sql` and `202609240002_collection_first.sql` are reviewed local source only. They have not been applied to the linked Supabase project, and no function was deployed for this redesign. The historical stages below describe the currently live collection-level schema. Do not use the redesigned app against that schema until the staged migration runbook in [BACKEND.md](BACKEND.md) is completed.
+> **Current redesign status — September 24, 2026:** `202609240001_public_image_lookup_bridge.sql` and `202609240002_collection_first.sql` are applied to the linked Supabase project. The media function paused mutations during the upgrade; bridge-aware `public-media` was deployed before the final transaction, and mutations were restored afterward. The app now uses the collection-first schema.
 
-## Pending collection-first rollout
+## Completed collection-first rollout
 
 - Local source now treats collections as parents, categories as optional children, and visibility as an item field.
 - Cloudflare R2 remains connected through server-side functions and the bucket must remain private; the redesign does not require a new bucket or client R2 credentials.
-- Before changing live services: back up metadata, record migration/function versions and media-limit switches, deploy the maintenance-capable media function with mutations paused, apply the bridge, deploy bridge-aware public-media, and then apply the transactional hierarchy migration.
-- After migration, validate with disposable owner/viewer accounts: private entry denial, public sibling visibility, revocation, category detachment, old-link scope, quota rejection, and private-bucket denial. Keep the beta blocked until those checks pass.
+- An ignored local metadata backup was made before the change. The maintenance-capable media function paused mutations, the bridge migration was applied, bridge-aware `public-media` was deployed, and the transactional hierarchy migration was applied. Mutations are restored.
+- Live checks confirm the legacy `collections.category_id` column is gone, categories have collection parents, items have visibility, the anonymous Explore projection is security-definer protected, and existing item/image metadata is preserved. Complete the remaining disposable owner/viewer checks: private entry denial, public sibling visibility, revocation, category detachment, old-link scope, quota rejection, and private-bucket denial before beta launch.
 
 ## Scope and authorization
 
@@ -75,6 +75,6 @@ The deployed defaults are 100 photos/account, 20 attempts/account/hour, 50 attem
 
 ## Current stopping point
 
-The six previous migrations, including `202609170005_public_catalog.sql`, and both media functions were deployed during integration. Real user-created accounts/uploads exist; the earlier empty-project checks are historical. The prior catalog listed shared collections across accounts. The collection-first bridge and hierarchy migrations remain pending, which is why a top-level collection currently fails with the legacy `collections.category_id` constraint. Do not reset the database or modify existing users for acceptance tests.
+All eight migrations, including `202609170005_public_catalog.sql`, `202609240001_public_image_lookup_bridge.sql`, and `202609240002_collection_first.sql`, and both media functions are deployed. Real user-created accounts/uploads exist; the earlier empty-project checks are historical. Explore now lists shared entries across accounts and can switch to collections. The legacy `collections.category_id` constraint that blocked top-level collection creation is no longer present. Do not reset the database or modify existing users for acceptance tests.
 
 The September 21 readiness review found missing mobile app identifiers/EAS association, a hosted web origin/share URL, native installation evidence, public-content reporting/blocking, published privacy/support/deletion pages, and cleanup scheduling. Hosted Auth/email settings still need verification. See [BETA-LAUNCH.md](BETA-LAUNCH.md) for ordered stages and device acceptance; [VERIFICATION.md](VERIFICATION.md) records checks completed locally.

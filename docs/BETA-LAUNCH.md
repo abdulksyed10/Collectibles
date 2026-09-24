@@ -6,7 +6,7 @@ Readiness review: September 21, 2026. Target: a small invited group on Android p
 
 - Custom collections → optional categories → entries, photos, acquired dates, editing, deletion and search.
 - Private entry defaults, owner-only database policies, an Explore feed, and read-only share links. Shared responses omit owner details, notes, acquired dates, storage keys, private entries, and Explore categories.
-- Supabase and both media functions are connected for the previous schema, and R2 stays private. The collection-first database migration must be applied before inviting beta users; the existing project and bucket must not be reset.
+- Supabase and both media functions are connected for the collection-first schema, and R2 stays private. The bridge and hierarchy migration completed on September 24; the existing project and bucket must not be reset.
 - Server-enforced photo count, upload attempts and byte reservations; app-wide emergency switches and public-photo read limits. In-app account deletion and a cleanup script exist.
 - Automated SQL/privacy/quota tests and browser fixtures. Fixtures are not evidence of live email delivery, native installation or device permissions.
 

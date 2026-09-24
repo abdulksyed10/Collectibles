@@ -6,7 +6,7 @@ This file is chronological. The latest completed stage and remaining live work a
 
 - Local tests cover empty collection-first accounts, optional child categories, per-entry private defaults, public/private siblings, category detachment, canonical and legacy public scopes, and public-media revocation.
 - `npm run typecheck` and the secret scan pass locally. The local machine does not have Deno, so the Edge Function type check remains a required GitHub Actions check.
-- The new migrations and compatible source are **not live**. Historical results below apply to the previous collection-level visibility schema and are not evidence that the redesign has been deployed.
+- The new migrations and compatible source are live. The staged run recorded in [the deployment checkpoint](DEPLOYMENT-CHECKPOINT.md) preserved the existing item/image metadata, removed the legacy collection category column, and exposed the bounded Explore projection.
 - The fixture browser run has been updated for the collection-first RPC/data shapes. The local Playwright process does not reliably report completion in this Windows shell session; rerun the workflow's app and isolated-demo browser jobs before deployment and record their exact result here.
 
 ## Passed locally
