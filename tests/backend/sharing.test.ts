@@ -162,6 +162,19 @@ test('public photo lookup checks collection membership and revocation on every G
   });
 });
 
+test('private public-image bridge authorizes only the currently shared collection',async()=>{
+  await pg.query('UPDATE private.owner_state SET deleting=false WHERE owner_id=$1',[owner]);
+  await pg.query('UPDATE collections SET visibility=$1 WHERE id=$2',['public',publicId]);
+  const allowed=(await pg.query<{full_key:string;thumb_key:string}>(
+    'SELECT full_key,thumb_key FROM private.resolve_public_image($1,$2)',[publicId,itemId],
+  )).rows;
+  assert.deepEqual(allowed,[{full_key:'owner/private/full.jpg',thumb_key:'owner/private/thumb.jpg'}]);
+  assert.deepEqual((await pg.query('SELECT * FROM private.resolve_public_image($1,$2)',[foreignId,itemId])).rows,[]);
+  await asRole('anon',null,async()=>{
+    await assert.rejects(pg.query('SELECT * FROM private.resolve_public_image($1,$2)',[publicId,itemId]),/permission denied/);
+  });
+});
+
 test('public handler hides provider errors and limits CORS to read methods',async()=>{
   const preflight=await handler(new Request('https://example.test/public-media',{method:'OPTIONS',headers:{origin:'https://app.example'}}));
   assert.equal(preflight.headers.get('access-control-allow-methods'),'GET, OPTIONS');

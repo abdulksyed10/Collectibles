@@ -1,6 +1,6 @@
 import { MediaError,readBoundedJson,validateAction,type Action } from './validation.ts';
 
-export function createHandler(options:{origins:string[];authenticate:(token:string)=>Promise<string|null>;handle:(owner:string,action:Action)=>Promise<unknown>}) {
+export function createHandler(options:{origins:string[];authenticate:(token:string)=>Promise<string|null>;handle:(owner:string,action:Action)=>Promise<unknown>;mutationsEnabled?:boolean}) {
   return async(request:Request):Promise<Response>=>{
     const origin=request.headers.get('origin');
     const headers=new Headers({'content-type':'application/json','cache-control':'no-store','vary':'Origin','x-content-type-options':'nosniff'});
@@ -19,6 +19,7 @@ export function createHandler(options:{origins:string[];authenticate:(token:stri
       const owner=await options.authenticate(match[1]);
       if(!owner)throw new MediaError(401,'invalid_session','Your session has expired. Sign in again.');
       const action=validateAction(await readBoundedJson(request));
+      if(options.mutationsEnabled===false && action.action!=='read')throw new MediaError(503,'maintenance','Changes are temporarily paused. Please try again.');
       return new Response(JSON.stringify(await options.handle(owner,action)),{status:200,headers});
     } catch(error) {
       const known=error instanceof MediaError;

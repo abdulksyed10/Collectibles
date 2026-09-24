@@ -33,3 +33,20 @@ test('internal provider details are not returned to callers',async()=>{
   assert.equal(response.status,503);
   assert.equal((await response.text()).includes('secret'),false);
 });
+
+test('maintenance pauses mutations before operations while preserving authenticated reads',async()=>{
+  const actions:string[]=[];
+  const options={
+    origins:[] as string[],
+    authenticate:async()=>owner,
+    handle:async(_owner:string,action:{action:string})=>{ actions.push(action.action); return {ok:true}; },
+    mutationsEnabled:false,
+  };
+  const paused=createHandler(options);
+  const upload=await paused(req({authorization:'Bearer valid-session'},'{"action":"upload","itemId":"20000000-0000-4000-8000-000000000002","imageBase64":"a","thumbnailBase64":"b"}'));
+  assert.equal(upload.status,503);
+  assert.deepEqual(actions,[]);
+  const read=await paused(req({authorization:'Bearer valid-session'},'{"action":"read","itemIds":[]}'));
+  assert.equal(read.status,200);
+  assert.deepEqual(actions,['read']);
+});

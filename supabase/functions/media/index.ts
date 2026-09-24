@@ -27,4 +27,5 @@ Deno.serve(createHandler({
     return data.user.id;
   },
   handle:media.handle,
+  mutationsEnabled:Deno.env.get('MEDIA_MUTATIONS_ENABLED')!=='false',
 }));
