@@ -1,6 +1,13 @@
-# Frontend verification — September 15, 2026
+# Frontend verification — updated September 24, 2026
 
 This file is chronological. The latest completed stage and remaining live work are in [the deployment checkpoint](DEPLOYMENT-CHECKPOINT.md) and [beta launch checklist](BETA-LAUNCH.md).
+
+## Collection-first redesign — September 24, 2026
+
+- Local tests cover empty collection-first accounts, optional child categories, per-entry private defaults, public/private siblings, category detachment, canonical and legacy public scopes, and public-media revocation.
+- `npm run typecheck` and the secret scan pass locally. The local machine does not have Deno, so the Edge Function type check remains a required GitHub Actions check.
+- The new migrations and compatible source are **not live**. Historical results below apply to the previous collection-level visibility schema and are not evidence that the redesign has been deployed.
+- The fixture browser run has been updated for the collection-first RPC/data shapes. The local Playwright process does not reliably report completion in this Windows shell session; rerun the workflow's app and isolated-demo browser jobs before deployment and record their exact result here.
 
 ## Passed locally
 

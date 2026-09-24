@@ -146,9 +146,8 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
       ListHeaderComponent={<View style={{ gap: 12, padding: 8, paddingBottom: 20 }}>
         {demo ? <Text style={[ui.muted, { fontSize: 12 }]}>Shared view preview · Demo only</Text> : null}
         {collection ? <>
-          <Text style={[ui.muted, { fontSize: 13 }]}>{collection.categoryName} · Public collection</Text>
+          <Text style={[ui.muted, { fontSize: 13 }]}>Shared collection</Text>
           <Text style={{ fontFamily: fonts.bold, fontSize: 26, color: colors.ink }}>{collection.name}</Text>
-          {collection.description ? <Text style={ui.text}>{collection.description}</Text> : null}
           <Text style={ui.muted}>{total} {total === 1 ? 'item' : 'items'}</Text>
         </> : null}
         <ErrorMessage message={error} />
@@ -159,7 +158,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
           <View style={{ aspectRatio: 1, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}>
             {photos[item.id] && !failedPhotos.has(item.id) ? <Image key={`${item.id}-${revision}`} source={{ uri: photos[item.id]!.thumb }} cachePolicy="none" accessibilityLabel={item.title} style={{ width: '100%', height: '100%' }} contentFit="cover" onError={() => photoFailed(item.id)} /> : <View style={{ alignItems: 'center', gap: 8 }}><Package size={32} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>{item.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text></View>}
           </View>
-          <Text numberOfLines={2} style={{ fontFamily: fonts.medium, color: colors.ink, padding: 12 }}>{item.title}</Text>
+          <View style={{ padding: 12, gap: 3 }}><Text numberOfLines={2} style={{ fontFamily: fonts.medium, color: colors.ink }}>{item.title}</Text>{item.categoryName ? <Text numberOfLines={1} style={[ui.muted, { fontSize: 12 }]}>{item.categoryName}</Text> : null}</View>
         </Pressable>
       </View>}
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : collection && !error ? <Text style={[ui.muted, { padding: 8 }]}>No items.</Text> : null}

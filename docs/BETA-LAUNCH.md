@@ -4,9 +4,9 @@ Readiness review: September 21, 2026. Target: a small invited group on Android p
 
 ## What is already implemented
 
-- Custom categories → collections → items, photos, acquired dates, editing, deletion and search.
-- Private defaults, owner-only database policies, public collection catalog and read-only share links. Public responses omit owner details, notes, acquired dates and storage keys.
-- Supabase schema and both media functions were deployed in the preceding integration work; R2 stays private. The user has tested real accounts/uploads. These services do not need to be created again or reset.
+- Custom collections → optional categories → entries, photos, acquired dates, editing, deletion and search.
+- Private entry defaults, owner-only database policies, an Explore feed, and read-only share links. Shared responses omit owner details, notes, acquired dates, storage keys, private entries, and Explore categories.
+- Supabase and both media functions are connected for the previous schema, and R2 stays private. The collection-first database migration must be applied before inviting beta users; the existing project and bucket must not be reset.
 - Server-enforced photo count, upload attempts and byte reservations; app-wide emergency switches and public-photo read limits. In-app account deletion and a cleanup script exist.
 - Automated SQL/privacy/quota tests and browser fixtures. Fixtures are not evidence of live email delivery, native installation or device permissions.
 
@@ -24,7 +24,7 @@ Acceptance: a new tester can confirm email, sign in, reset a password, upload a 
 
 ## Stage 2 — public sharing and store preparation
 
-The current Public tab exposes user-generated photos. There is no report/block/moderation workflow yet. Before distributing this experience through store review:
+Explore exposes user-generated photos. There is no report/block/moderation workflow yet. Before distributing this experience through store review:
 
 - Implement reporting for collections/items and their publishers, blocking publishers, filtering/review of objectionable content, and an operator process to handle reports and remove content promptly. Enforce removals in the catalog, share links and image proxy as well as the UI; preserve owner privacy. Include abuse tests and bounded reporting rates.
 - Publish community rules/terms with acceptance before contributing public content, an accurate privacy policy, and support/contact information. Explain private defaults and optional public visibility without promising that shared images cannot be copied.
@@ -49,7 +49,7 @@ Run the same release candidate on a physical Android phone, iPhone, and tablet/i
 - Photo library with limited/denied access, camera grant/denial, cancellation, large/rotated/HEIC photos and thumbnail quality. Confirm image conversion and upload limits on device.
 - Keyboard covering fields, scrolling at small widths, safe areas, Android Back, native date picker, large text, screen-reader labels and touch targets.
 - Slow/offline connections, expired session/URLs, failed/retried uploads, quota errors and recovery without duplicate or lost items.
-- Two accounts: owner can edit; others can only view public collections. Anonymous link access, public-to-private revocation, publisher blocking and moderation removal affect both metadata and photos.
+- Two accounts: owner can edit; others can view only collections with public entries. Entry public-to-private revocation, publisher blocking and moderation removal affect both metadata and photos. Verify mixed-visibility siblings and category deletion without item/photo loss.
 - Existing content survives app upgrades. No unexpected permissions, secret values or private photos appear in logs/crash reports.
 
 ## Information needed to proceed

@@ -1,6 +1,6 @@
 import { requireClient } from '../lib/supabase';
-import { escapeSearch, validateCategory, validateCollection, validateCollectionSettings, validateItem } from '../domain/validation';
-import type { Category, Collection, CollectionRepository, Item, ItemImage, PublicCollectionPage, SharedCollectionPage } from '../domain/models';
+import { escapeSearch, validateCategory, validateCategorySettings, validateCollection, validateCollectionSettings, validateItem, validateItemSettings } from '../domain/validation';
+import type { Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, PublicCollectionPage, PublicEntryPage, SharedCollectionPage } from '../domain/models';
 import { todayLocalDate } from '../domain/dates';
 import { isCollectionId, validateSharedPage } from '../domain/sharing';
 const PAGE_SIZE = 24;
@@ -16,40 +16,44 @@ async function media<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 export const repository: CollectionRepository = {
-  async listCategories() {
-    const { data, error } = await requireClient().from('categories').select('*').order('created_at').order('id').limit(20);
+  async listCategories(collectionId) {
+    let query = requireClient().from('categories').select('*').order('created_at').order('id').limit(50);
+    if (collectionId) query = query.eq('collection_id', collectionId);
+    const { data, error } = await query;
     if (error) throw error;
     return data as Category[];
   },
   async saveCategory(draft, id) {
-    const value = validateCategory(draft);
-    const query = id ? requireClient().from('categories').update(value).eq('id', id) : requireClient().from('categories').insert(value);
+    const value = { ...validateCategory(draft), ...validateCategorySettings(draft) };
+    const query = id
+      ? requireClient().from('categories').update(value).eq('id', id)
+      : requireClient().from('categories').insert({ ...value, collection_id: draft.collectionId, description: value.description ?? '', acquired_on: value.acquired_on ?? null });
     const { data, error } = await query.select().single();
     if (error) throw error;
     return data as Category;
   },
   async deleteCategory(id) {
-    const { error } = await requireClient().from('categories').delete().eq('id', id);
-    if (error?.code === '23503') throw new Error('Move or delete this category’s collections first.');
+    const { error } = await requireClient().rpc('delete_category', { p_category_id: id });
     if (error) throw error;
   },
-  async listCollections() {
-    const { data, error } = await requireClient().from('collections').select('*').order('created_at', { ascending: false }).limit(50);
-    if (error) throw error;
-    return data as Collection[];
+  async listCollections(options = {}) {
+    const { data, error } = await requireClient().rpc('list_owned_collections', { p_search: options.search ?? '', p_visibility: options.visibility ?? null });
+    if (error || !data) throw new Error('Unable to load your collections. Try again.');
+    const rows = (data as { collections?: Array<{ id: string; ownerId: string; name: string; description: string; acquiredOn: string | null; createdAt: string; itemCount: number; coverItemId: string | null; lastUploadedAt: string | null }> }).collections ?? [];
+    return rows.map(row => ({ id: row.id, owner_id: row.ownerId, name: row.name, description: row.description, acquired_on: row.acquiredOn, created_at: row.createdAt, itemCount: row.itemCount, coverItemId: row.coverItemId, lastUploadedAt: row.lastUploadedAt })) as CollectionSummary[];
   },
   async saveCollection(draft, id) {
-    if (!draft.categoryId) throw new Error('Choose a category first.');
-    const value = { ...(!id ? { visibility: 'private', acquired_on: todayLocalDate() } : {}), ...validateCollection(draft), ...validateCollectionSettings(draft), category_id: draft.categoryId };
-    const query = id ? requireClient().from('collections').update(value).eq('id', id) : requireClient().from('collections').insert(value);
+    const value = { ...validateCollection(draft), ...validateCollectionSettings(draft) };
+    const createValue = { ...value, acquired_on: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on };
+    const query = id ? requireClient().from('collections').update(value).eq('id', id) : requireClient().from('collections').insert(createValue);
     const { data, error } = await query.select().single();
     if (error) throw error;
     return data as Collection;
   },
   async listItems({ categoryId, collectionId, search, page, visibility }) {
-    let query = requireClient().from('items').select('*,collections!inner(category_id,visibility)', { count: 'exact' }).order('created_at', { ascending: false }).order('id', { ascending: false });
-    if (visibility) query = query.eq('collections.visibility', visibility);
-    if (categoryId) query = query.eq('collections.category_id', categoryId);
+    let query = requireClient().from('items').select('*', { count: 'exact' }).order('created_at', { ascending: false }).order('id', { ascending: false });
+    if (visibility) query = query.eq('visibility', visibility);
+    if (categoryId) query = query.eq('category_id', categoryId);
     if (collectionId) query = query.eq('collection_id', collectionId);
     if (search.trim()) query = query.ilike('title', `%${escapeSearch(search.trim())}%`);
     const { data, count, error } = await query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -64,6 +68,12 @@ export const repository: CollectionRepository = {
     if (!data) throw new Error('Collection unavailable.');
     return data as SharedCollectionPage;
   },
+  async listPublicEntries(page) {
+    validateSharedPage(page);
+    const { data, error } = await requireClient().rpc('list_public_entries', { p_page: page });
+    if (error || !data) throw new Error('Unable to load Explore. Try again.');
+    return data as PublicEntryPage;
+  },
   async listPublicCollections(page) {
     validateSharedPage(page);
     const { data, error } = await requireClient().rpc('list_public_collections', { p_page: page });
@@ -71,8 +81,10 @@ export const repository: CollectionRepository = {
     return data as PublicCollectionPage;
   },
   async saveItem(draft, id) {
-    const value = { ...validateItem(draft), collection_id: draft.collectionId };
-    const query = id ? requireClient().from('items').update(value).eq('id', id) : requireClient().from('items').insert(value);
+    const value = { ...validateItem(draft), ...validateItemSettings(draft), collection_id: draft.collectionId };
+    const query = id
+      ? requireClient().from('items').update(value).eq('id', id)
+      : requireClient().from('items').insert({ ...value, category_id: value.category_id ?? null, visibility: value.visibility ?? 'private' });
     const { data, error } = await query.select().single();
     if (error) throw error;
     return data as Item;

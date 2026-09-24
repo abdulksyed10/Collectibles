@@ -39,7 +39,7 @@ npx supabase db push --dry-run
 npx supabase db push
 ```
 
-Apply all six files in timestamp order. The initial migration creates tables, relationships, indexes, owner policies and quotas; the second migration supports isolated photo-upload attempts; `202609160002_collectibles_hierarchy.sql` adds customizable categories and renames pins to items while preserving existing data and image keys. `202609160003_collection_sharing.sql` adds private-by-default visibility, acquired dates and the bounded public projection. `202609160004_media_budgets.sql` adds private server counters: photo count, upload rate, byte reservations, public-photo reads and emergency pause switches. `202609170005_public_catalog.sql` adds the paginated Public-tab catalog, exposing only public collection card data through a security-definer function. Deploy both updated media functions after these migrations. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
+The previous six migrations are already present. The current app requires the staged collection-first upgrade in `202609240001_public_image_lookup_bridge.sql` and `202609240002_collection_first.sql`. Do not run a blanket `db push` while the previous app can write: follow the maintenance sequence in [BACKEND.md](BACKEND.md), including the write pause, bridge-aware function deployment, metadata backup, and post-migration acceptance checks. Prefer the CLI so migration history is recorded. Review any pre-existing table-name conflicts before applying.
 
 ## 4. Configure R2 privacy and browser access
 
@@ -79,7 +79,7 @@ The `media` function validates user sessions itself and rejects unauthenticated 
 - Configure signups/invites, email confirmation, a real confirmation redirect and email delivery for testers.
 - Use the recovery-code email template in the root README. Match the hosted password minimum to the app and local Auth configuration (at least ten characters).
 - Verify with two disposable test accounts: each can manage its own collection and cannot read/edit/sign/delete the other's records or photos.
-- Host the web app and set `EXPO_PUBLIC_WEB_URL` for native share links. Add the hosted origin to the server/bucket origin settings. Verify the Public tab shows another test account's public collection and its photo, while excluding notes, dates, owner IDs and storage keys. Switch it back to Private and verify it disappears from the catalog and shared links. See [sharing setup](COLLECTION-SHARING.md).
+- Host the web app and set `EXPO_PUBLIC_WEB_URL` for native share links. Add the hosted origin to the server/bucket origin settings. Verify Explore shows another test account's shared entry and its photo, while excluding notes, categories, dates, owner IDs and storage keys. Switch it back to Private and verify it disappears from Explore and shared links. See [sharing setup](COLLECTION-SHARING.md).
 - Check JPEG uploads, expired URLs, failed-upload retries, collection/account deletion and cleanup of abandoned attempts.
 - Schedule the cleanup script from a trusted server job runner, using server secrets. See `BACKEND.md`.
 - Generate client database types after migrations, enable `EXPO_PUBLIC_ENABLE_BACKEND=true` locally, and restart with `npx expo start --clear`.
@@ -88,6 +88,6 @@ Then test installed Android/iOS development builds, camera permissions and sessi
 
 ## Current project status
 
-For project `hoxesktykdwuvunhqnrp`, the six migrations, seven server secrets, and both Edge Functions were deployed during integration. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. Real accounts and uploaded photos now exist. R2 was verified private with local browser CORS configured. The local backend flag is enabled. Use disposable data for the remaining acceptance checks; do not reset the project. See [the beta launch checklist](BETA-LAUNCH.md) for hosted origins, email, moderation, cleanup and signed-device testing still needed.
+For project `hoxesktykdwuvunhqnrp`, the six previous migrations, seven server secrets, and both Edge Functions were deployed during integration. Credential-free endpoint checks returned 401 from `media` without a session and 400 from `public-media` with an invalid request. Real accounts and uploaded photos now exist. R2 was verified private with local browser CORS configured. The collection-first bridge and hierarchy migration remain pending, so new accounts cannot use the redesigned app until the staged upgrade is complete. Use disposable data for acceptance checks; do not reset the project. See [the beta launch checklist](BETA-LAUNCH.md) for hosted origins, email, moderation, cleanup and signed-device testing still needed.
 
 Provider references: [Supabase CLI migrations](https://supabase.com/docs/reference/cli/supabase-db-push), [function deployment](https://supabase.com/docs/guides/functions/deploy), [server secrets](https://supabase.com/docs/guides/functions/secrets), [R2 CORS](https://developers.cloudflare.com/r2/buckets/cors/).

@@ -5,7 +5,7 @@ select jsonb_build_object(
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where c.relkind = 'r' and (
       (n.nspname = 'public' and c.relname in ('categories', 'collections', 'items', 'item_images')) or
-      (n.nspname = 'private' and c.relname in ('owner_state', 'media_inventory', 'media_limits', 'media_budget_global', 'media_budget_owner', 'media_upload_attempts', 'public_media_reads'))
+      (n.nspname = 'private' and c.relname in ('owner_state', 'media_inventory', 'media_limits', 'media_budget_global', 'media_budget_owner', 'media_upload_attempts', 'public_media_reads', 'collection_first_category_map', 'legacy_collection_shares'))
     )
   ),
   'owner_policies', (
@@ -26,11 +26,18 @@ select jsonb_build_object(
   'client_can_change_category_owner', has_column_privilege('authenticated', 'public.categories', 'owner_id', 'UPDATE'),
   'client_can_change_category_identity', has_column_privilege('authenticated', 'public.categories', 'id', 'UPDATE'),
   'client_can_delete_categories', has_table_privilege('authenticated', 'public.categories', 'DELETE'),
-  'client_can_set_collection_category', has_column_privilege('authenticated', 'public.collections', 'category_id', 'UPDATE'),
-  'collection_sharing_columns', (
+  'client_can_reparent_category', has_column_privilege('authenticated', 'public.categories', 'collection_id', 'UPDATE'),
+  'client_can_set_item_visibility', has_column_privilege('authenticated', 'public.items', 'visibility', 'UPDATE'),
+  'collection_first_columns', (
     select jsonb_agg(jsonb_build_object('column', column_name, 'type', data_type, 'default', column_default, 'nullable', is_nullable) order by column_name)
     from information_schema.columns
-    where table_schema = 'public' and table_name = 'collections' and column_name in ('visibility', 'acquired_on')
+    where (table_schema, table_name, column_name) in (
+      ('public', 'collections', 'acquired_on'),
+      ('public', 'categories', 'collection_id'),
+      ('public', 'categories', 'acquired_on'),
+      ('public', 'items', 'category_id'),
+      ('public', 'items', 'visibility')
+    )
   ),
   'anonymous_can_use_shared_projection', has_function_privilege('anon', 'public.get_shared_collection(uuid,integer)', 'EXECUTE'),
   'shared_projection_security_definer', (
@@ -40,6 +47,14 @@ select jsonb_build_object(
   'public_catalog_security_definer', (
     select prosecdef from pg_proc where oid = 'public.list_public_collections(integer)'::regprocedure
   ),
+  'anonymous_can_use_explore_entries', has_function_privilege('anon', 'public.list_public_entries(integer)', 'EXECUTE'),
+  'explore_entries_security_definer', (
+    select prosecdef from pg_proc where oid = 'public.list_public_entries(integer)'::regprocedure
+  ),
+  'authenticated_can_use_owned_collection_summaries', has_function_privilege('authenticated', 'public.list_owned_collections(text,text)', 'EXECUTE'),
+  'authenticated_can_delete_category_via_rpc', has_function_privilege('authenticated', 'public.delete_category(uuid)', 'EXECUTE'),
+  'public_image_helper_is_server_only', not has_function_privilege('anon', 'private.resolve_public_image(uuid,uuid)', 'EXECUTE')
+    and not has_function_privilege('authenticated', 'private.resolve_public_image(uuid,uuid)', 'EXECUTE'),
   'anonymous_can_write_collections', has_table_privilege('anon', 'public.collections', 'INSERT,UPDATE,DELETE'),
   'client_can_write_image_keys', has_column_privilege('authenticated', 'public.item_images', 'full_key', 'INSERT,UPDATE'),
   'client_can_access_private_schema', has_schema_privilege('authenticated', 'private', 'USAGE'),

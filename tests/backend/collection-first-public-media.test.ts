@@ -1,6 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHierarchyFixture } from './hierarchy-fixture.ts';
+import { asOwner, createHierarchyFixture } from './hierarchy-fixture.ts';
 import { lookupPublicImage } from '../../supabase/functions/public-media/lookup.ts';
 import { createPublicMediaHandler } from '../../supabase/functions/public-media/http.ts';
 
@@ -49,6 +49,13 @@ before(async () => {
 after(async () => db?.close());
 
 test('public handler and catalog exclude private entries and keep legacy links category-scoped', async () => {
+  const explore = (await db.query<{ page: any }>('SELECT public.list_public_entries($1) AS page', [0])).rows[0].page;
+  assert.deepEqual(explore.entries, [
+    { id: publicTravel, title: 'Public travel', hasPhoto: true, collectionId: collection, collectionName: 'Pins' },
+    { id: publicPark, title: 'Public park', hasPhoto: true, collectionId: collection, collectionName: 'Pins' },
+  ]);
+  assert.equal(explore.total, 2);
+
   const catalog = (await db.query<{ page: any }>('SELECT public.list_public_collections($1) AS page', [0])).rows[0].page;
   assert.deepEqual(catalog.collections, [{
     id: collection,
@@ -68,4 +75,16 @@ test('public handler and catalog exclude private entries and keep legacy links c
   await db.query("UPDATE public.items SET visibility='private' WHERE id=$1", [publicPark]);
   assert.equal((await handler(request(legacyParksLink, publicPark))).status, 404);
   assert.equal(reads.length, 2);
+});
+
+test('owner collection summaries count only the requested entry visibility', async () => {
+  await asOwner(db, owner, async () => {
+    const all = (await db.query<{ page: any }>("SELECT public.list_owned_collections('', null) AS page")).rows[0].page;
+    const publicOnly = (await db.query<{ page: any }>("SELECT public.list_owned_collections('', 'public') AS page")).rows[0].page;
+    assert.equal(all.collections[0].id, collection);
+    assert.equal(all.collections[0].ownerId, owner);
+    assert.equal(all.collections[0].itemCount, 3);
+    assert.equal(publicOnly.collections[0].id, collection);
+    assert.equal(publicOnly.collections[0].itemCount, 1);
+  });
 });

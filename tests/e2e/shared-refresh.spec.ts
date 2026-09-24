@@ -13,6 +13,8 @@ async function sharedBackend(page: Page) {
       id: `00000000-0000-4000-8000-${String(index + 101).padStart(12, '0')}`,
       title: `Shared item ${index + 1}`,
       hasPhoto: index === 25,
+      categoryId: null,
+      categoryName: null,
     })),
     requestedPages: [] as number[],
   };
@@ -24,7 +26,9 @@ async function sharedBackend(page: Page) {
     state.requestedPages.push(p_page);
     if (!state.public) { await route.fulfill({ contentType: 'application/json', body: 'null' }); return; }
     await route.fulfill({ json: {
-      collection: { id: collectionId, name: state.collectionName, description: 'Shared collection', categoryName: 'Pins' },
+      collection: { id: collectionId, name: state.collectionName },
+      scope: { collectionId, categoryId: null },
+      categories: [],
       items: state.items.slice(p_page * 24, (p_page + 1) * 24),
       total: state.items.length,
       hasMore: (p_page + 1) * 24 < state.items.length,

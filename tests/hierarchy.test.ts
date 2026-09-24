@@ -1,51 +1,50 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDemoRepository } from '../src/data/demo';
-import { validateCategory } from '../src/domain/validation';
+import { todayLocalDate } from '../src/domain/dates';
 
-test('category names are required, trimmed and bounded', () => {
-  assert.throws(() => validateCategory({ name: '  ' }));
-  assert.throws(() => validateCategory({ name: 'x'.repeat(81) }));
-  assert.deepEqual(validateCategory({ name: ' Bottle Caps ' }), { name: 'Bottle Caps' });
-});
-
-test('custom collectible types contain collections and cannot be deleted while populated', async () => {
-  const repo = createDemoRepository();
-  const category = await repo.saveCategory({ name: 'Boots' });
-  const collection = await repo.saveCollection({ name: 'Vintage', description: '', categoryId: category.id });
-  const item = await repo.saveItem({ title: 'Desert boots', notes: '', collectionId: collection.id });
-  await repo.uploadPhoto(item.id, { uri: 'file:photo', imageBase64: 'photo', thumbnailBase64: 'thumb' });
-  assert.equal((await repo.listItems({ categoryId: category.id, search: '', page: 0 })).items[0].id, item.id);
-  await assert.rejects(repo.deleteCategory(category.id), /collection/i);
-  await repo.deleteCollection(collection.id);
-  await repo.deleteCategory(category.id);
-  assert.deepEqual(await repo.readImages([item.id]), []);
-  assert.ok(!(await repo.listCategories()).some(c => c.id === category.id));
-  assert.ok(!(await createDemoRepository().listCategories()).some(c => c.name === 'Boots'));
-});
-
-test('category filtering follows collection moves without changing item or image identity', async () => {
-  const repo = createDemoRepository();
-  const before = await repo.listItems({ categoryId: 'pins', search: '', page: 0 });
-  const sample = before.items.find(i => i.collection_id === 'adventures')!;
-  const image = await repo.readImages([sample.id]);
-  const moved = await repo.saveCollection({ name: 'Little adventures', description: '', categoryId: 'bottle-caps' }, 'adventures');
-  assert.equal(moved.category_id, 'bottle-caps');
-  const pins = await repo.listItems({ categoryId: 'pins', search: '', page: 0 });
-  const caps = await repo.listItems({ categoryId: 'bottle-caps', collectionId: 'adventures', search: '', page: 0 });
-  assert.ok(!pins.items.some(i => i.id === sample.id));
-  assert.ok(caps.items.some(i => i.id === sample.id));
-  assert.deepEqual(await repo.readImages([sample.id]), image);
-  assert.equal((await repo.listItems({ categoryId: 'pins', collectionId: 'adventures', search: '', page: 0 })).total, 0);
-  await repo.saveCategory({ name: 'Caps' }, 'bottle-caps');
-  assert.equal((await repo.listCategories()).find(c => c.id === 'bottle-caps')?.name, 'Caps');
-  await assert.rejects(repo.saveCollection({ name: 'Orphan', description: '', categoryId: 'missing' }));
-});
-
-test('demo enforces category quota and deletes all categories on account deletion', async () => {
-  const repo = createDemoRepository();
-  for (let i = (await repo.listCategories()).length; i < 20; i++) await repo.saveCategory({ name: `Category ${i}` });
-  await assert.rejects(repo.saveCategory({ name: 'Too many' }), /20/);
-  await repo.deleteAccount();
+test('empty library creates collections before optional categories and private entries', async () => {
+  const repo = createDemoRepository({ empty: true });
+  assert.deepEqual(await repo.listCollections(), []);
   assert.deepEqual(await repo.listCategories(), []);
+  const collection = await repo.saveCollection({ name: 'Pins', description: '' });
+  assert.equal(collection.acquired_on, todayLocalDate());
+  const unknownDate = await repo.saveCollection({ name: 'Undated', description: '', acquiredOn: null });
+  assert.equal(unknownDate.acquired_on, null);
+  assert.equal((await repo.saveCollection({ name: 'Still undated', description: '', }, unknownDate.id)).acquired_on, null);
+  const category = await repo.saveCategory({ name: 'Parks', collectionId: collection.id });
+  const privateItem = await repo.saveItem({ title: 'Gift pin', notes: '', collectionId: collection.id });
+  const publicItem = await repo.saveItem({ title: 'Park pin', notes: '', collectionId: collection.id, categoryId: category.id, visibility: 'public' });
+  assert.equal(privateItem.visibility, 'private');
+  assert.equal(privateItem.category_id, null);
+  assert.equal(publicItem.visibility, 'public');
+  assert.equal(publicItem.category_id, category.id);
+  assert.equal((await repo.listItems({ collectionId: collection.id, search: '', page: 0 })).total, 2);
+});
+
+test('categories stay inside their collection and deletion detaches entries without changing visibility', async () => {
+  const repo = createDemoRepository({ empty: true });
+  const pins = await repo.saveCollection({ name: 'Pins', description: '' });
+  const cards = await repo.saveCollection({ name: 'Cards', description: '' });
+  const parks = await repo.saveCategory({ name: 'Parks', collectionId: pins.id });
+  const rare = await repo.saveCategory({ name: 'Rare', collectionId: cards.id });
+  await assert.rejects(repo.saveItem({ title: 'Wrong parent', notes: '', collectionId: pins.id, categoryId: rare.id }), /category/i);
+  const item = await repo.saveItem({ title: 'Park pin', notes: '', collectionId: pins.id, categoryId: parks.id, visibility: 'public' });
+  await repo.deleteCategory(parks.id);
+  const after = (await repo.listItems({ collectionId: pins.id, search: '', page: 0 })).items.find(value => value.id === item.id)!;
+  assert.equal(after.category_id, null);
+  assert.equal(after.visibility, 'public');
+  assert.deepEqual(await repo.listCategories(pins.id), []);
+});
+
+test('collection summaries use the newest matching entry while items retain their visibility after edits', async () => {
+  const repo = createDemoRepository({ empty: true });
+  const pins = await repo.saveCollection({ name: 'Pins', description: '' });
+  const cards = await repo.saveCollection({ name: 'Cards', description: '' });
+  const first = await repo.saveItem({ title: 'First', notes: '', collectionId: pins.id, visibility: 'public' });
+  await repo.saveItem({ title: 'Second', notes: '', collectionId: cards.id, visibility: 'private' });
+  const edited = await repo.saveItem({ title: 'First renamed', notes: '', collectionId: pins.id }, first.id);
+  assert.equal(edited.visibility, 'public');
+  const publicCollections = await repo.listCollections({ visibility: 'public' });
+  assert.deepEqual(publicCollections.map(collection => collection.id), [pins.id]);
 });

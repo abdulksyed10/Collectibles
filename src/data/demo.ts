@@ -1,5 +1,5 @@
-import type { Category, Collection, CollectionRepository, Item, ItemImage } from '../domain/models';
-import { validateCategory, validateCollection, validateCollectionSettings, validateItem } from '../domain/validation';
+import type { Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, ItemVisibility } from '../domain/models';
+import { validateCategory, validateCategorySettings, validateCollection, validateCollectionSettings, validateItem, validateItemSettings } from '../domain/validation';
 import { todayLocalDate } from '../domain/dates';
 import { validateSharedPage } from '../domain/sharing';
 
@@ -17,100 +17,186 @@ function samplePhoto(index: number) {
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="${backgrounds[index]}"/><ellipse cx="153" cy="240" rx="58" ry="8" fill="#253c35" opacity=".08"/><g stroke="#b49a63" stroke-width="5" stroke-linejoin="round">${drawings[index]}</g></svg>`)}`;
 }
 
+function copyCollection(collection: Collection): Collection { return { ...collection }; }
+function copyItem(item: Item): Item { return { ...item }; }
+
 /** A fresh, disposable collection for each demo visit. Never touches disk or APIs. */
-export function createDemoRepository(): CollectionRepository {
+export function createDemoRepository(options: { empty?: boolean } = {}): CollectionRepository {
   const owner_id = 'demo';
   const created_at = '2026-01-01T12:00:00.000Z';
   let sequence = 6;
-  let categories: Category[] = [
-    { id: 'pins', name: 'Pins' },
-    { id: 'cards', name: 'Pokémon Cards' },
-    { id: 'bottle-caps', name: 'Bottle Caps' },
-  ].map(c => ({ ...c, owner_id, created_at }));
-  let collections: Collection[] = [
-    { id: 'adventures', category_id: 'pins', name: 'Travel pins', description: 'Pins from national parks and trips.' },
-    { id: 'favorites', category_id: 'pins', name: 'Enamel pins', description: '' },
-    { id: 'cards-first', category_id: 'cards', name: 'First editions', description: '' },
-    { id: 'caps-travel', category_id: 'bottle-caps', name: 'Bottle caps', description: '' },
-  ].map(c => ({ ...c, owner_id, created_at, visibility: 'private', acquired_on: '2026-01-01' }));
+  let collections: Collection[] = options.empty ? [] : [
+    { id: 'pins', name: 'Pins', description: 'Pins from trips and gifts.', acquired_on: '2026-01-01' },
+    { id: 'cards', name: 'Pokémon cards', description: '', acquired_on: '2026-01-01' },
+    { id: 'bottle-caps', name: 'Bottle caps', description: '', acquired_on: '2026-01-01' },
+  ].map(collection => ({ ...collection, owner_id, created_at }));
+  let categories: Category[] = options.empty ? [] : [
+    { id: 'parks', collection_id: 'pins', name: 'National parks', description: '', acquired_on: null },
+    { id: 'enamel', collection_id: 'pins', name: 'Enamel pins', description: '', acquired_on: null },
+    { id: 'first-editions', collection_id: 'cards', name: 'First editions', description: '', acquired_on: null },
+  ].map(category => ({ ...category, owner_id, created_at }));
   const titles = ['Mountain pin', 'Cat pin', 'Wave pin', 'Trading card', 'Lakeside cap', 'Orchard cap'];
-  let items: Item[] = titles.map((title, i) => ({ id: `sample-${i}`, owner_id, title, notes: 'Sample item.', collection_id: ['adventures', 'favorites', 'adventures', 'cards-first', 'caps-travel', 'caps-travel'][i]!, created_at, updated_at: created_at }));
-  const images = new Map<string, ItemImage>(items.map((item, i) => [item.id, { itemId: item.id, url: samplePhoto(i), thumbnailUrl: samplePhoto(i), expiresAt: '2099-01-01T00:00:00Z' }]));
-  function requireItem(id: string) { const item = items.find(p => p.id === id); if (!item) throw new Error('This item no longer exists.'); return item; }
+  let items: Item[] = options.empty ? [] : titles.map((title, index) => ({
+    id: `sample-${index}`,
+    owner_id,
+    title,
+    notes: 'Sample item.',
+    collection_id: ['pins', 'pins', 'pins', 'cards', 'bottle-caps', 'bottle-caps'][index]!,
+    category_id: ['parks', 'enamel', 'parks', 'first-editions', null, null][index]!,
+    visibility: index === 0 || index === 3 ? 'public' : 'private',
+    created_at,
+    updated_at: created_at,
+  }));
+  const images = new Map<string, ItemImage>(items.map((item, index) => [item.id, { itemId: item.id, url: samplePhoto(index), thumbnailUrl: samplePhoto(index), expiresAt: '2099-01-01T00:00:00Z' }]));
+
+  function requireItem(id: string) {
+    const item = items.find(value => value.id === id);
+    if (!item) throw new Error('This item no longer exists.');
+    return item;
+  }
+  function requireCollection(id: string) {
+    const collection = collections.find(value => value.id === id);
+    if (!collection) throw new Error('Choose a collection first.');
+    return collection;
+  }
+  function requireCategoryForCollection(categoryId: string | null | undefined, collectionId: string) {
+    if (!categoryId) return;
+    if (!categories.some(value => value.id === categoryId && value.collection_id === collectionId)) throw new Error('Choose a category in this collection.');
+  }
+  function itemsFor(options: { collectionId?: string; categoryId?: string; visibility?: ItemVisibility; search?: string }) {
+    const query = options.search?.trim().toLowerCase() ?? '';
+    return items.filter(item =>
+      (!options.collectionId || item.collection_id === options.collectionId)
+      && (!options.categoryId || item.category_id === options.categoryId)
+      && (!options.visibility || item.visibility === options.visibility)
+      && (!query || item.title.toLowerCase().includes(query)),
+    ).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
+  }
+  function collectionSummaries(options: { search?: string; visibility?: ItemVisibility } = {}): CollectionSummary[] {
+    const search = options.search?.trim().toLowerCase() ?? '';
+    return collections
+      .filter(collection => !search || collection.name.toLowerCase().includes(search))
+      .map(collection => {
+        const matchingItems = itemsFor({ collectionId: collection.id, visibility: options.visibility });
+        const cover = matchingItems.find(item => images.has(item.id));
+        return { ...copyCollection(collection), itemCount: matchingItems.length, coverItemId: cover?.id ?? null, lastUploadedAt: matchingItems[0]?.created_at ?? null };
+      })
+      .filter(collection => !options.visibility || collection.itemCount > 0)
+      .sort((a, b) => (b.lastUploadedAt ?? b.created_at).localeCompare(a.lastUploadedAt ?? a.created_at) || b.id.localeCompare(a.id));
+  }
+
   return {
-    async listCategories() { return categories.map(c => ({ ...c })); },
+    async listCategories(collectionId) {
+      return categories.filter(category => !collectionId || category.collection_id === collectionId).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(category => ({ ...category }));
+    },
     async saveCategory(draft, id) {
-      const value = validateCategory(draft);
-      if (id) { const existing = categories.find(c => c.id === id); if (!existing) throw new Error('This category no longer exists.'); Object.assign(existing, value); return { ...existing }; }
-      if (categories.length >= 20) throw new Error('This preview supports up to 20 categories.');
-      const category = { ...value, id: `demo-${++sequence}`, owner_id, created_at: new Date().toISOString() };
-      categories = [...categories, category]; return { ...category };
+      requireCollection(draft.collectionId);
+      const value = { ...validateCategory(draft), ...validateCategorySettings(draft) };
+      if (id) {
+        const existing = categories.find(category => category.id === id);
+        if (!existing) throw new Error('This category no longer exists.');
+        if (existing.collection_id !== draft.collectionId) throw new Error('A category cannot be moved to another collection.');
+        Object.assign(existing, value);
+        return { ...existing };
+      }
+      if (categories.length >= 50) throw new Error('This preview supports up to 50 categories.');
+      const category: Category = { id: `demo-${++sequence}`, owner_id, collection_id: draft.collectionId, name: value.name, description: value.description ?? '', acquired_on: value.acquired_on ?? null, created_at: new Date().toISOString() };
+      categories = [...categories, category];
+      return { ...category };
     },
     async deleteCategory(id) {
-      if (collections.some(c => c.category_id === id)) throw new Error('Move or delete this category’s collections first.');
-      categories = categories.filter(c => c.id !== id);
+      categories = categories.filter(category => category.id !== id);
+      items = items.map(item => item.category_id === id ? { ...item, category_id: null } : item);
     },
-    async listCollections() { return collections.map(c => ({ ...c })); },
+    async listCollections(options) { return collectionSummaries(options); },
     async saveCollection(draft, id) {
-      if (!categories.some(c => c.id === draft.categoryId)) throw new Error('Choose a category first.');
-      const value = { ...validateCollection(draft), ...validateCollectionSettings(draft), category_id: draft.categoryId };
-      if (id) { const existing = collections.find(c => c.id === id); if (!existing) throw new Error('This collection no longer exists.'); Object.assign(existing, value); return { ...existing }; }
+      const value = { ...validateCollection(draft), ...validateCollectionSettings(draft) };
+      if (id) {
+        const existing = collections.find(collection => collection.id === id);
+        if (!existing) throw new Error('This collection no longer exists.');
+        Object.assign(existing, value);
+        return copyCollection(existing);
+      }
       if (collections.length >= 50) throw new Error('This preview supports up to 50 collections.');
-      const collection: Collection = { visibility: 'private', acquired_on: todayLocalDate(), ...value, id: `demo-${++sequence}`, owner_id, created_at: new Date().toISOString() };
-      collections = [collection, ...collections]; return { ...collection };
+      const collection: Collection = { id: `demo-${++sequence}`, owner_id, name: value.name, description: value.description, acquired_on: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on, created_at: new Date().toISOString() };
+      collections = [collection, ...collections];
+      return copyCollection(collection);
     },
     async listItems({ categoryId, collectionId, search, page, visibility }) {
-      const allowedCollections = new Set(collections.filter(c => (!categoryId || c.category_id === categoryId) && (!visibility || c.visibility === visibility)).map(c => c.id));
-      const found = items.filter(p => allowedCollections.has(p.collection_id) && (!collectionId || p.collection_id === collectionId) && p.title.toLowerCase().includes(search.trim().toLowerCase()));
-      return { items: found.slice(page * 24, (page + 1) * 24).map(p => ({ ...p })), total: found.length, hasMore: (page + 1) * 24 < found.length };
+      const found = itemsFor({ categoryId, collectionId, search, visibility });
+      return { items: found.slice(page * 24, (page + 1) * 24).map(copyItem), total: found.length, hasMore: (page + 1) * 24 < found.length };
     },
     async readSharedCollection(id, page) {
       validateSharedPage(page);
-      const collection = collections.find(c => c.id === id && c.visibility === 'public');
-      if (!collection) throw new Error('Collection unavailable.');
-      const found = items.filter(item => item.collection_id === id);
+      const collection = collections.find(value => value.id === id);
+      const found = itemsFor({ collectionId: id, visibility: 'public' });
+      if (!collection || !found.length) throw new Error('Collection unavailable.');
+      const visibleCategories = categories.filter(category => category.collection_id === id && found.some(item => item.category_id === category.id)).map(category => ({ id: category.id, name: category.name }));
       return {
-        collection: { id, name: collection.name, description: collection.description, categoryName: categories.find(c => c.id === collection.category_id)?.name ?? '' },
-        items: found.slice(page * 24, (page + 1) * 24).map(item => ({ id: item.id, title: item.title, hasPhoto: images.has(item.id) })),
-        total: found.length, hasMore: (page + 1) * 24 < found.length,
+        collection: { id, name: collection.name },
+        scope: { collectionId: id, categoryId: null },
+        categories: visibleCategories,
+        items: found.slice(page * 24, (page + 1) * 24).map(item => ({
+          id: item.id,
+          title: item.title,
+          hasPhoto: images.has(item.id),
+          categoryId: item.category_id,
+          categoryName: categories.find(category => category.id === item.category_id)?.name ?? null,
+        })),
+        total: found.length,
+        hasMore: (page + 1) * 24 < found.length,
+      };
+    },
+    async listPublicEntries(page) {
+      validateSharedPage(page);
+      const found = itemsFor({ visibility: 'public' });
+      return {
+        entries: found.slice(page * 24, (page + 1) * 24).map(item => ({
+          id: item.id,
+          title: item.title,
+          hasPhoto: images.has(item.id),
+          collectionId: item.collection_id,
+          collectionName: requireCollection(item.collection_id).name,
+        })),
+        total: found.length,
+        hasMore: (page + 1) * 24 < found.length,
       };
     },
     async listPublicCollections(page) {
       validateSharedPage(page);
-      const found = collections.filter(collection => collection.visibility === 'public').sort((a, b) => b.created_at.localeCompare(a.created_at));
+      const found = collectionSummaries({ visibility: 'public' });
       return {
-        collections: found.slice(page * 24, (page + 1) * 24).map(collection => {
-          const collectionItems = items.filter(item => item.collection_id === collection.id);
-          const cover = collectionItems.find(item => images.has(item.id));
-          return {
-            id: collection.id,
-            name: collection.name,
-            description: collection.description,
-            categoryName: categories.find(category => category.id === collection.category_id)?.name ?? '',
-            itemCount: collectionItems.length,
-            coverItemId: cover?.id ?? null,
-            isOwner: true,
-          };
-        }),
+        collections: found.slice(page * 24, (page + 1) * 24).map(collection => ({ id: collection.id, name: collection.name, itemCount: collection.itemCount, coverItemId: collection.coverItemId, isOwner: true })),
         total: found.length,
         hasMore: (page + 1) * 24 < found.length,
       };
     },
     async saveItem(draft, id) {
-      const value = { ...validateItem(draft), collection_id: draft.collectionId, updated_at: new Date().toISOString() };
-      if (!collections.some(c => c.id === draft.collectionId)) throw new Error('Choose a collection first.');
-      if (id) { const existing = requireItem(id); Object.assign(existing, value); return { ...existing }; }
+      requireCollection(draft.collectionId);
+      requireCategoryForCollection(draft.categoryId, draft.collectionId);
+      const value = { ...validateItem(draft), ...validateItemSettings(draft), collection_id: draft.collectionId, updated_at: new Date().toISOString() };
+      if (id) {
+        const existing = requireItem(id);
+        Object.assign(existing, value);
+        return copyItem(existing);
+      }
       if (items.length >= 500) throw new Error('This preview supports up to 500 items.');
-      const item = { ...value, id: `demo-${++sequence}`, owner_id, created_at: value.updated_at };
-      items = [item, ...items]; return { ...item };
+      const item: Item = { id: `demo-${++sequence}`, owner_id, title: value.title, notes: value.notes, collection_id: value.collection_id, category_id: value.category_id ?? null, visibility: value.visibility ?? 'private', created_at: value.updated_at, updated_at: value.updated_at };
+      items = [item, ...items];
+      return copyItem(item);
     },
     async readImages(ids) { return ids.flatMap(id => { const image = images.get(id); return image ? [{ ...image }] : []; }); },
     async uploadPhoto(itemId, photo) {
       requireItem(itemId);
       images.set(itemId, { itemId, url: `data:image/jpeg;base64,${photo.imageBase64}`, thumbnailUrl: `data:image/jpeg;base64,${photo.thumbnailBase64}`, expiresAt: '2099-01-01T00:00:00Z' });
     },
-    async deleteItem(id) { items = items.filter(p => p.id !== id); images.delete(id); },
-    async deleteCollection(id) { items.filter(p => p.collection_id === id).forEach(p => images.delete(p.id)); items = items.filter(p => p.collection_id !== id); collections = collections.filter(c => c.id !== id); },
+    async deleteItem(id) { items = items.filter(item => item.id !== id); images.delete(id); },
+    async deleteCollection(id) {
+      items.filter(item => item.collection_id === id).forEach(item => images.delete(item.id));
+      items = items.filter(item => item.collection_id !== id);
+      categories = categories.filter(category => category.collection_id !== id);
+      collections = collections.filter(collection => collection.id !== id);
+    },
     async deleteAccount() { categories = []; collections = []; items = []; images.clear(); },
   };
 }

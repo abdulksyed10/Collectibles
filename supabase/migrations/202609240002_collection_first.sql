@@ -217,6 +217,56 @@ $$;
 revoke all on function public.get_shared_collection(uuid, integer) from public, anon, authenticated;
 grant execute on function public.get_shared_collection(uuid, integer) to anon, authenticated, service_role;
 
+-- Explore is an entry feed. Its public projection deliberately omits notes,
+-- categories, dates, owners, and storage keys. Collections remain available as
+-- a separate, compact view below.
+create or replace function public.list_public_entries(p_page integer default 0)
+returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  entry_rows jsonb;
+  entry_total integer;
+begin
+  if p_page is null or p_page < 0 or p_page > 20 then return null; end if;
+
+  select count(*) into entry_total
+    from public.items i
+    join public.collections c on c.id = i.collection_id and c.owner_id = i.owner_id
+    join private.owner_state s on s.owner_id = i.owner_id and s.deleting = false
+    where i.visibility = 'public';
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', page.id,
+      'title', page.title,
+      'hasPhoto', page.has_photo,
+      'collectionId', page.collection_id,
+      'collectionName', page.collection_name
+    ) order by page.created_at desc, page.id desc), '[]'::jsonb)
+    into entry_rows
+    from (
+      select i.id, i.title, i.collection_id, c.name as collection_name, i.created_at,
+        exists(
+          select 1 from public.item_images img
+          where img.item_id = i.id and img.owner_id = i.owner_id
+        ) as has_photo
+      from public.items i
+      join public.collections c on c.id = i.collection_id and c.owner_id = i.owner_id
+      join private.owner_state s on s.owner_id = i.owner_id and s.deleting = false
+      where i.visibility = 'public'
+      order by i.created_at desc, i.id desc
+      limit 24 offset (p_page::bigint * 24)
+    ) page;
+
+  return jsonb_build_object(
+    'entries', entry_rows,
+    'total', entry_total,
+    'hasMore', p_page::bigint * 24 + jsonb_array_length(entry_rows) < entry_total
+  );
+end;
+$$;
+revoke all on function public.list_public_entries(integer) from public, anon, authenticated;
+grant execute on function public.list_public_entries(integer) to anon, authenticated, service_role;
+
 create or replace function public.list_public_collections(p_page integer default 0)
 returns jsonb
 language plpgsql stable security definer set search_path = '' as $$
@@ -275,6 +325,7 @@ begin
     or (p_visibility is not null and p_visibility not in ('private', 'public')) then return null; end if;
   select coalesce(jsonb_agg(jsonb_build_object(
       'id', page.id,
+      'ownerId', page.owner_id,
       'name', page.name,
       'description', page.description,
       'acquiredOn', page.acquired_on,
@@ -285,7 +336,7 @@ begin
     ) order by coalesce(page.last_uploaded_at, page.created_at) desc, page.id desc), '[]'::jsonb)
     into collection_rows
     from (
-      select c.id, c.name, c.description, c.acquired_on, c.created_at,
+      select c.id, c.owner_id, c.name, c.description, c.acquired_on, c.created_at,
         count(i.id)::integer as item_count,
         max(i.created_at) as last_uploaded_at,
         (
@@ -299,8 +350,9 @@ begin
       from public.collections c
       left join public.items i on i.collection_id = c.id and i.owner_id = c.owner_id
         and (p_visibility is null or i.visibility = p_visibility)
-      where c.owner_id = auth.uid() and c.name ilike '%' || replace(replace(replace(p_search, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' escape '\\'
-      group by c.id, c.name, c.description, c.acquired_on, c.created_at
+      where c.owner_id = auth.uid() and c.name ilike '%' || replace(replace(replace(p_search, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') || '%' escape E'\\'
+      group by c.id, c.owner_id, c.name, c.description, c.acquired_on, c.created_at
+      having p_visibility is null or count(i.id) > 0
     ) page;
   return jsonb_build_object('collections', collection_rows);
 end;

@@ -46,7 +46,7 @@ export function AuthScreen({ onDemo }: { onDemo: () => void }) {
       <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery email' : 'Verify code'} onPress={submit} loading={busy} disabled={!serviceReady} icon={ArrowRight} />
       </View>
       <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Collectibles?' : mode === 'signup' ? 'Already have an account?' : ''}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => change(mode === 'signin' ? 'signup' : 'signin')}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
-      <View style={[ui.row, { justifyContent: 'center', paddingTop: 12 }]}><LockKeyhole size={13} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Collections are private until you choose to share them.</Text></View>
+      <View style={[ui.row, { justifyContent: 'center', paddingTop: 12 }]}><LockKeyhole size={13} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Entries stay private until you make them public.</Text></View>
     </View>
   </View><Text style={[ui.muted, { fontSize: 11, textAlign: 'center', marginTop: 32 }]}>MADE FOR THE JOY OF COLLECTING</Text></View></ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }

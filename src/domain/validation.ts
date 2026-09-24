@@ -1,14 +1,27 @@
 import { validateAcquiredDate } from './dates';
-import type { CollectionDraft, CollectionVisibility } from './models';
+import type { CategoryDraft, CollectionDraft, ItemDraft, ItemVisibility } from './models';
 export type ClientConfig = { ready: true; url: string; key: string } | { ready: false; reason: string };
 
-export function validateCollectionSettings(value: Pick<CollectionDraft, 'visibility' | 'acquiredOn'>) {
-  const settings: { visibility?: CollectionVisibility; acquired_on?: string } = {};
+export function validateCollectionSettings(value: Pick<CollectionDraft, 'acquiredOn'>) {
+  const settings: { acquired_on?: string | null } = {};
+  if (value.acquiredOn !== undefined) settings.acquired_on = validateAcquiredDate(value.acquiredOn);
+  return settings;
+}
+
+export function validateCategorySettings(value: Pick<CategoryDraft, 'description' | 'acquiredOn'>) {
+  const settings: { description?: string; acquired_on?: string | null } = {};
+  if (value.description !== undefined) settings.description = bounded(value.description, 'Description', 500, false);
+  if (value.acquiredOn !== undefined) settings.acquired_on = validateAcquiredDate(value.acquiredOn);
+  return settings;
+}
+
+export function validateItemSettings(value: Pick<ItemDraft, 'visibility' | 'categoryId'>) {
+  const settings: { visibility?: ItemVisibility; category_id?: string | null } = {};
   if (value.visibility !== undefined) {
     if (value.visibility !== 'private' && value.visibility !== 'public') throw new Error('Choose Private or Public.');
     settings.visibility = value.visibility;
   }
-  if (value.acquiredOn !== undefined) settings.acquired_on = validateAcquiredDate(value.acquiredOn);
+  if (value.categoryId !== undefined) settings.category_id = value.categoryId;
   return settings;
 }
 

@@ -3,7 +3,8 @@ export function todayLocalDate(date = new Date()): string {
   return `${String(date.getFullYear()).padStart(4, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-export function validateAcquiredDate(value: string): string {
+export function validateAcquiredDate(value: string | null): string | null {
+  if (value === null) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (match) {
     const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);

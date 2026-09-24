@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useRepository } from './RepositoryProvider';
-import type { Category, Collection, CollectionVisibility, Item, ItemImage } from '../domain/models';
+import type { Category, CollectionSummary, Item, ItemImage, ItemVisibility } from '../domain/models';
 import { messageOf } from '../components/ui';
-export function useLibrary(categoryId: string | undefined, collectionId: string | undefined, search: string, visibility: CollectionVisibility = 'private') {
+export function useLibrary(categoryId: string | undefined, collectionId: string | undefined, search: string, visibility?: ItemVisibility) {
   const repository = useRepository();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [collections, setCollections] = useState<Collection[]>([]); const [items, setItems] = useState<Item[]>([]); const [images, setImages] = useState<Record<string, ItemImage>>({});
+  const [collections, setCollections] = useState<CollectionSummary[]>([]); const [items, setItems] = useState<Item[]>([]); const [images, setImages] = useState<Record<string, ItemImage>>({});
   const [total, setTotal] = useState(0); const [hasMore, setHasMore] = useState(false); const [loading, setLoading] = useState(true); const [moreLoading, setMoreLoading] = useState(false); const [error, setError] = useState(''); const [photoError, setPhotoError] = useState(''); const [revision, setRevision] = useState(0);
   const pageRef = useRef(0); const requestRef = useRef(0); const itemsRef = useRef<Item[]>([]); const loadingMoreRef = useRef(false);
   const refresh = useCallback(() => setRevision(n => n + 1), []);
