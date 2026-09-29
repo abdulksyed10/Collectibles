@@ -11,8 +11,8 @@ major_version = 17
 
 [auth]
 enabled = true
-site_url = "http://localhost:8081"
-additional_redirect_urls = ["collectibles://**"]
+site_url = "https://collectibles-three.vercel.app"
+additional_redirect_urls = ["https://collectibles-three.vercel.app/**", "collectibles://**"]
 enable_signup = true
 minimum_password_length = 8
 
