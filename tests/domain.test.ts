@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as validation from '../src/domain/validation.ts';
 import { validateItem, validateCollection, escapeSearch, readClientConfig } from '../src/domain/validation.ts';
+
+function validatePassword(value: string): string {
+  const candidate = (validation as typeof validation & { validatePassword?: (password: string) => string }).validatePassword;
+  assert.equal(typeof candidate, 'function', 'validatePassword should be available to password forms');
+  return candidate(value);
+}
+
+test('passwords require eight characters with uppercase lowercase and number but no symbol', () => {
+  assert.equal(validatePassword('Collect1'), 'Collect1');
+  assert.throws(() => validatePassword('C0llect'), /8 or more/i);
+  assert.throws(() => validatePassword('collect12'), /uppercase/i);
+  assert.throws(() => validatePassword('COLLECT12'), /lowercase/i);
+  assert.throws(() => validatePassword('Collecton'), /number/i);
+});
 
 test('item input cannot be blank or exceed the stored column limit', () => {
   assert.throws(() => validateItem({ title: '   ', notes: '' }));

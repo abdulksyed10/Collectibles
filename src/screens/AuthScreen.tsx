@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { ArrowRight, Check, LockKeyhole, Layers3, Eye, EyeOff, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,24 +6,62 @@ import { auth } from '../auth/session';
 import { serviceReady } from '../lib/supabase';
 import { Brand, Button, colors, ErrorMessage, Field, fonts, messageOf, ui } from '../components/ui';
 import { CollectionArtwork } from '../components/CollectionArtwork';
-export function AuthScreen({ onDemo }: { onDemo: () => void }) {
+import { validatePassword } from '../domain/validation';
+import { CaptchaChallenge } from '../components/CaptchaChallenge';
+import { mapAuthError, recordCredentialFailure, secondsUntil } from '../auth/security';
+export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplore: () => void }) {
   const wide = useWindowDimensions().width >= 860;
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'verify'>('signin');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [code, setCode] = useState('');
   const [visible, setVisible] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
-  function change(next: typeof mode) { setMode(next); setError(''); setNotice(''); setPassword(''); }
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaVersion, setCaptchaVersion] = useState(0);
+  const [credentialFailures, setCredentialFailures] = useState<number[]>([]);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const captchaSiteKey = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY?.trim() || '';
+  const captchaApplies = Boolean(captchaSiteKey) && mode !== 'verify';
+  const cooldownSeconds = secondsUntil(cooldownUntil, now);
+  const signInPaused = mode === 'signin' && cooldownSeconds > 0;
+  useEffect(() => {
+    if (!cooldownUntil || cooldownUntil <= Date.now()) return;
+    const interval = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(interval);
+  }, [cooldownUntil]);
+  useEffect(() => {
+    if (cooldownUntil && cooldownUntil <= now) setCooldownUntil(null);
+  }, [cooldownUntil, now]);
+  function resetCaptcha() { setCaptchaToken(null); setCaptchaVersion(value => value + 1); }
+  function change(next: typeof mode) { setMode(next); setError(''); setNotice(''); setPassword(''); resetCaptcha(); }
   async function submit() {
     if (!serviceReady || busy) return;
+    const submittedAt = Date.now();
+    if (mode === 'signin' && secondsUntil(cooldownUntil, submittedAt) > 0) { setError(`Wait ${secondsUntil(cooldownUntil, submittedAt)} seconds before trying again.`); return; }
     setError(''); setNotice('');
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setError('Enter a valid email address.'); return; }
-    if ((mode === 'signin' || mode === 'signup') && password.length < (mode === 'signup' ? 10 : 1)) { setError(mode === 'signup' ? 'Use a password with at least 10 characters.' : 'Enter your password.'); return; }
+    if (mode === 'signin' && !password) { setError('Enter your password.'); return; }
+    if (mode === 'signup') { try { validatePassword(password); } catch (reason) { setError(messageOf(reason)); return; } }
+    if (captchaApplies && !captchaToken) { setError('Complete the security check first.'); return; }
     setBusy(true);
+    const token = captchaToken ?? undefined;
+    if (captchaApplies) setCaptchaToken(null);
     try {
-      if (mode === 'signin') await auth.signIn(email, password);
-      if (mode === 'signup') { const signedIn = await auth.signUp(email, password); if (!signedIn) { change('signin'); setNotice('Check your email to confirm your account, then sign in here.'); } }
-      if (mode === 'reset') { await auth.sendReset(email); setMode('verify'); setNotice('If this email has an account, a recovery email is on its way. Enter its code below.'); }
+      if (mode === 'signin') { await auth.signIn(email, password, token); setCredentialFailures([]); setCooldownUntil(null); }
+      if (mode === 'signup') { const signedIn = await auth.signUp(email, password, token); if (!signedIn) { change('signin'); setNotice('Check your email to confirm your account, then sign in here.'); } }
+      if (mode === 'reset') { await auth.sendReset(email, token); setMode('verify'); setNotice('If this email has an account, a recovery email is on its way. Enter its code below.'); }
       if (mode === 'verify') await auth.verifyReset(email, code);
-    } catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
+    } catch (e) {
+      const issue = mapAuthError(e, submittedAt);
+      if (mode === 'signin' && issue.kind === 'credentials') {
+        const outcome = recordCredentialFailure(credentialFailures, submittedAt);
+        setCredentialFailures(outcome.failures);
+        if (outcome.retryAt) { setCooldownUntil(outcome.retryAt); setNow(submittedAt); setError('Too many incorrect attempts. Wait 60 seconds before trying again.'); }
+        else setError(issue.message);
+      } else {
+        if (issue.retryAt) { setCooldownUntil(issue.retryAt); setNow(submittedAt); }
+        setError(issue.message);
+      }
+    } finally { if (captchaApplies) resetCaptcha(); setBusy(false); }
   }
   const heading = mode === 'signup' ? 'A home for your finds.' : mode === 'reset' ? 'Let’s get you back in.' : mode === 'verify' ? 'Check your inbox.' : 'Welcome to your collection.';
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, padding: wide ? 36 : 24 }}><View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center', flex: 1 }}><View style={[ui.row, { justifyContent: 'space-between', marginBottom: wide ? 40 : 30 }]}><Brand /><View style={[ui.row, { gap: 6 }]}><LockKeyhole size={14} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Your own little world</Text></View></View><View style={{ flex: 1, flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: wide ? 80 : 28 }}>
@@ -37,13 +75,15 @@ export function AuthScreen({ onDemo }: { onDemo: () => void }) {
     <View style={{ width: '100%', maxWidth: 400, paddingVertical: 20, gap: 23 }}>
       <View style={{ gap: 10 }}><Text style={[ui.title, { fontSize: 37, lineHeight: 41 }]}>{heading}</Text><Text style={ui.muted}>{mode === 'signin' ? 'Sign in to pick up where you left off.' : mode === 'signup' ? 'Start saving the things you love.' : 'Recover access to your private collection.'}</Text></View>
       {!serviceReady ? <View style={{ backgroundColor: colors.sand, padding: 15, borderRadius: 12 }}><Text style={[ui.text, { fontFamily: fonts.medium, fontSize: 13 }]}>Take a look around.</Text><Text style={[ui.muted, { fontSize: 12 }]}>Try a sample collection while account sign-in is being set up.</Text></View> : null}
-      <View style={{ gap: 8 }}><Button title="Try the demo" secondary={serviceReady} onPress={onDemo} disabled={busy} icon={Layers3} /><Text style={[ui.muted, { fontSize: 12, textAlign: 'center' }]}>No account needed. Demo changes reset when you leave.</Text></View>
+      <View style={{ gap: 8 }}><Button title="Explore shared items" secondary={serviceReady} onPress={onExplore} disabled={busy} icon={Layers3} /><Button title="Try the demo" secondary onPress={onDemo} disabled={busy} icon={Layers3} /><Text style={[ui.muted, { fontSize: 12, textAlign: 'center' }]}>No account needed. Demo changes reset when you leave.</Text></View>
       <View style={{ gap: 18 }}><Field label="Email address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" editable={!busy} />
-      {mode === 'signin' || mode === 'signup' ? <View><Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'signup' ? 'At least 10 characters' : 'Your password'} secureTextEntry={!visible} autoCapitalize="none" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} editable={!busy} onSubmitEditing={submit} style={{ paddingRight: 52 }} /><Pressable accessibilityRole="button" accessibilityLabel={visible ? 'Hide password' : 'Show password'} onPress={() => setVisible(!visible)} style={{ position: 'absolute', right: 14, bottom: 14 }}>{visible ? <EyeOff size={21} color={colors.muted} /> : <Eye size={21} color={colors.muted} />}</Pressable></View> : null}
+      {mode === 'signin' || mode === 'signup' ? <View><Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'signup' ? '8+ characters, upper, lower, number' : 'Your password'} secureTextEntry={!visible} autoCapitalize="none" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} editable={!busy} onSubmitEditing={submit} style={{ paddingRight: 52 }} /><Pressable accessibilityRole="button" accessibilityLabel={visible ? 'Hide password' : 'Show password'} onPress={() => setVisible(!visible)} style={{ position: 'absolute', right: 14, bottom: 14 }}>{visible ? <EyeOff size={21} color={colors.muted} /> : <Eye size={21} color={colors.muted} />}</Pressable></View> : null}
       {mode === 'verify' ? <Field label="Recovery code" value={code} onChangeText={setCode} placeholder="Code from your email" keyboardType="number-pad" autoComplete="one-time-code" editable={!busy} /> : null}
       {mode === 'signin' ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => change('reset')} style={{ alignSelf: 'flex-end' }}><Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 13 }}>Forgot password?</Text></Pressable> : null}
+      {captchaApplies ? <CaptchaChallenge key={`${mode}-${captchaVersion}`} siteKey={captchaSiteKey} onToken={token => { setCaptchaToken(token); setError(''); }} onError={() => setCaptchaToken(null)} /> : null}
+      {signInPaused ? <Text accessibilityRole="alert" style={[ui.muted, { fontSize: 13 }]}>Wait {cooldownSeconds} seconds before trying again.</Text> : null}
       <ErrorMessage message={error} />{notice ? <Text accessibilityRole="alert" style={[ui.text, { color: colors.green, fontSize: 14 }]}>{notice}</Text> : null}
-      <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery email' : 'Verify code'} onPress={submit} loading={busy} disabled={!serviceReady} icon={ArrowRight} />
+      <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery email' : 'Verify code'} onPress={submit} loading={busy} disabled={!serviceReady || signInPaused || (captchaApplies && !captchaToken)} icon={ArrowRight} />
       </View>
       <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Collectibles?' : mode === 'signup' ? 'Already have an account?' : ''}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => change(mode === 'signin' ? 'signup' : 'signin')}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
       <View style={[ui.row, { justifyContent: 'center', paddingTop: 12 }]}><LockKeyhole size={13} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Entries stay private until you make them public.</Text></View>
@@ -52,6 +92,6 @@ export function AuthScreen({ onDemo }: { onDemo: () => void }) {
 }
 export function RecoveryScreen({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  async function save() { setError(''); if (password.length < 10) { setError('Use at least 10 characters.'); return; } setBusy(true); try { await auth.updatePassword(password); onDone(); } catch (e) { setError(messageOf(e)); } finally { setBusy(false); } }
+  async function save() { setError(''); try { validatePassword(password); } catch (reason) { setError(messageOf(reason)); return; } setBusy(true); try { await auth.updatePassword(password); onDone(); } catch (e) { setError(messageOf(e)); } finally { setBusy(false); } }
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center', padding: 24 }}><View style={{ width: '100%', maxWidth: 400, gap: 24 }}><Brand /><Text style={ui.title}>A fresh start.</Text><Field label="New password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" /><ErrorMessage message={error} /><Button title="Save new password" onPress={save} loading={busy} /><Button title="Cancel and sign out" secondary disabled={busy} onPress={() => { void auth.signOut().catch(e => setError(messageOf(e))); }} /></View></SafeAreaView>;
 }

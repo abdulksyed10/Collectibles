@@ -27,9 +27,9 @@ export function useSession() {
   return { session, loading, recovery, finishRecovery: () => setRecovery(false) };
 }
 export const auth = {
-  async signIn(email: string, password: string) { const { error } = await requireClient().auth.signInWithPassword({ email: email.trim(), password }); if (error) throw error; },
-  async signUp(email: string, password: string) { const { data, error } = await requireClient().auth.signUp({ email: email.trim(), password }); if (error) throw error; return Boolean(data.session); },
-  async sendReset(email: string) { const { error } = await requireClient().auth.resetPasswordForEmail(email.trim()); if (error) throw error; },
+  async signIn(email: string, password: string, captchaToken?: string) { const { error } = await requireClient().auth.signInWithPassword({ email: email.trim(), password, options: captchaToken ? { captchaToken } : undefined }); if (error) throw error; },
+  async signUp(email: string, password: string, captchaToken?: string) { const { data, error } = await requireClient().auth.signUp({ email: email.trim(), password, options: captchaToken ? { captchaToken } : undefined }); if (error) throw error; return Boolean(data.session); },
+  async sendReset(email: string, captchaToken?: string) { const { error } = await requireClient().auth.resetPasswordForEmail(email.trim(), captchaToken ? { captchaToken } : undefined); if (error) throw error; },
   async verifyReset(email: string, token: string) { const { error } = await requireClient().auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'recovery' }); if (error) throw error; },
   async updatePassword(password: string) { const { error } = await requireClient().auth.updateUser({ password }); if (error) throw error; },
   async signOut() { const { error } = await requireClient().auth.signOut({ scope: 'local' }); if (error) throw error; },

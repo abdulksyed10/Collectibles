@@ -1,5 +1,5 @@
 import type { Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, ItemVisibility } from '../domain/models';
-import { validateCategory, validateCategorySettings, validateCollection, validateCollectionSettings, validateItem, validateItemSettings } from '../domain/validation';
+import { validateCategory, validateCategorySettings, validateCollection, validateItem, validateItemSettings } from '../domain/validation';
 import { todayLocalDate } from '../domain/dates';
 import { validateSharedPage } from '../domain/sharing';
 
@@ -44,6 +44,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
     collection_id: ['pins', 'pins', 'pins', 'cards', 'bottle-caps', 'bottle-caps'][index]!,
     category_id: ['parks', 'enamel', 'parks', 'first-editions', null, null][index]!,
     visibility: index === 0 || index === 3 ? 'public' : 'private',
+    acquired_on: index === 0 ? '2025-08-14' : null,
     created_at,
     updated_at: created_at,
   }));
@@ -84,6 +85,10 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
       .filter(collection => !options.visibility || collection.itemCount > 0)
       .sort((a, b) => (b.lastUploadedAt ?? b.created_at).localeCompare(a.lastUploadedAt ?? a.created_at) || b.id.localeCompare(a.id));
   }
+  function topicKey(name: string) {
+    const words = name.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(word => word && !['a', 'an', 'the', 'my', 'collection', 'collections'].includes(word));
+    return (words.map(word => word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word).join(' ') || 'collection');
+  }
 
   return {
     async listCategories(collectionId) {
@@ -110,7 +115,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
     },
     async listCollections(options) { return collectionSummaries(options); },
     async saveCollection(draft, id) {
-      const value = { ...validateCollection(draft), ...validateCollectionSettings(draft) };
+      const value = validateCollection(draft);
       if (id) {
         const existing = collections.find(collection => collection.id === id);
         if (!existing) throw new Error('This collection no longer exists.');
@@ -118,7 +123,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
         return copyCollection(existing);
       }
       if (collections.length >= 50) throw new Error('This preview supports up to 50 collections.');
-      const collection: Collection = { id: `demo-${++sequence}`, owner_id, name: value.name, description: value.description, acquired_on: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on, created_at: new Date().toISOString() };
+      const collection: Collection = { id: `demo-${++sequence}`, owner_id, name: value.name, description: value.description, acquired_on: null, created_at: new Date().toISOString() };
       collections = [collection, ...collections];
       return copyCollection(collection);
     },
@@ -171,17 +176,51 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
         hasMore: (page + 1) * 24 < found.length,
       };
     },
+    async listPublicTopics(page) {
+      validateSharedPage(page);
+      const groups = new Map<string, { key: string; name: string; itemCount: number; collectionCount: number; coverItemId: string | null; coverCollectionId: string | null; lastUploadedAt: string | null }>();
+      for (const collection of collectionSummaries({ visibility: 'public' })) {
+        const key = topicKey(collection.name);
+        const current = groups.get(key);
+        if (!current) groups.set(key, { key, name: collection.name, itemCount: collection.itemCount, collectionCount: 1, coverItemId: collection.coverItemId, coverCollectionId: collection.coverItemId ? collection.id : null, lastUploadedAt: collection.lastUploadedAt });
+        else {
+          current.itemCount += collection.itemCount; current.collectionCount += 1;
+          if (collection.name.length < current.name.length || (collection.name.length === current.name.length && collection.name < current.name)) current.name = collection.name;
+          if ((collection.lastUploadedAt ?? '') > (current.lastUploadedAt ?? '')) { current.lastUploadedAt = collection.lastUploadedAt; current.coverItemId = collection.coverItemId; current.coverCollectionId = collection.coverItemId ? collection.id : null; }
+        }
+      }
+      const topics = [...groups.values()].sort((a, b) => (b.lastUploadedAt ?? '').localeCompare(a.lastUploadedAt ?? '') || b.key.localeCompare(a.key));
+      return { topics: topics.slice(page * 24, (page + 1) * 24).map(({ lastUploadedAt: _lastUploadedAt, ...topic }) => topic), total: topics.length, hasMore: (page + 1) * 24 < topics.length };
+    },
+    async readPublicTopic(key, page) {
+      validateSharedPage(page);
+      const matches = collectionSummaries({ visibility: 'public' }).filter(collection => topicKey(collection.name) === key);
+      if (!matches.length) throw new Error('Collection unavailable.');
+      const entries = itemsFor({ visibility: 'public' }).filter(item => topicKey(requireCollection(item.collection_id).name) === key).map(item => ({ id: item.id, title: item.title, hasPhoto: images.has(item.id), collectionId: item.collection_id, collectionName: requireCollection(item.collection_id).name }));
+      const name = matches.map(collection => collection.name).sort((a, b) => a.length - b.length || a.localeCompare(b))[0]!;
+      return { topic: { key, name }, entries: entries.slice(page * 24, (page + 1) * 24), total: entries.length, hasMore: (page + 1) * 24 < entries.length };
+    },
     async saveItem(draft, id) {
-      requireCollection(draft.collectionId);
-      requireCategoryForCollection(draft.categoryId, draft.collectionId);
-      const value = { ...validateItem(draft), ...validateItemSettings(draft), collection_id: draft.collectionId, updated_at: new Date().toISOString() };
+      if (draft.collectionId && draft.newCollectionName) throw new Error('Choose one collection option.');
+      if (draft.categoryId && draft.newCategoryName) throw new Error('Choose one category option.');
+      let collectionId = draft.collectionId;
+      if (!collectionId && draft.newCollectionName) collectionId = (await this.saveCollection({ name: draft.newCollectionName, description: '' })).id;
+      if (!collectionId) {
+        const general = collections.find(collection => collection.name.toLowerCase() === 'general');
+        collectionId = general?.id ?? (await this.saveCollection({ name: 'General', description: '' })).id;
+      }
+      requireCollection(collectionId);
+      let categoryId = draft.categoryId;
+      if (!categoryId && draft.newCategoryName) categoryId = (await this.saveCategory({ name: draft.newCategoryName, collectionId })).id;
+      requireCategoryForCollection(categoryId, collectionId);
+      const value = { ...validateItem(draft), ...validateItemSettings(draft), collection_id: collectionId, updated_at: new Date().toISOString() };
       if (id) {
         const existing = requireItem(id);
         Object.assign(existing, value);
         return copyItem(existing);
       }
       if (items.length >= 500) throw new Error('This preview supports up to 500 items.');
-      const item: Item = { id: `demo-${++sequence}`, owner_id, title: value.title, notes: value.notes, collection_id: value.collection_id, category_id: value.category_id ?? null, visibility: value.visibility ?? 'private', created_at: value.updated_at, updated_at: value.updated_at };
+      const item: Item = { id: `demo-${++sequence}`, owner_id, title: value.title, notes: value.notes, collection_id: collectionId, category_id: categoryId ?? null, visibility: value.visibility ?? 'private', acquired_on: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on, created_at: value.updated_at, updated_at: value.updated_at };
       items = [item, ...items];
       return copyItem(item);
     },

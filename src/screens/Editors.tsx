@@ -38,21 +38,18 @@ export function CollectionEditor({ collection, onClose, onSaved, onDelete }: { c
   const repository = useRepository();
   const [name, setName] = useState(collection?.name ?? '');
   const [description, setDescription] = useState(collection?.description ?? '');
-  const [acquiredOn, setAcquiredOn] = useState<string | null>(collection ? collection.acquired_on : todayLocalDate());
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   async function save() {
     setError('');
     if (!name.trim()) { setError('Enter a collection name.'); return; }
-    try { validateAcquiredDate(acquiredOn); } catch (reason) { setError(messageOf(reason)); return; }
     setBusy(true);
-    try { onSaved(await repository.saveCollection({ name: name.trim(), description, acquiredOn }, collection?.id)); }
+    try { onSaved(await repository.saveCollection({ name: name.trim(), description }, collection?.id)); }
     catch (reason) { setError(messageOf(reason)); }
     finally { setBusy(false); }
   }
   return <Sheet title={collection ? 'Edit collection' : 'New collection'} onClose={onClose} busy={busy}>
     <Field label="Collection name" placeholder="e.g. Bottle caps" value={name} onChangeText={setName} maxLength={80} autoFocus editable={!busy} />
     <Field label="Description (optional)" placeholder="A short note about this collection" value={description} onChangeText={setDescription} maxLength={500} multiline editable={!busy} />
-    <AcquiredDateField value={acquiredOn} onChange={setAcquiredOn} disabled={busy} />
     <ErrorMessage message={error} />
     <Button title={collection ? 'Save collection' : 'Create collection'} icon={collection ? Check : Plus} onPress={() => { void save(); }} loading={busy} />
     {collection ? <Button title="Delete collection" icon={Trash2} secondary danger onPress={onDelete} disabled={busy} /> : null}
@@ -65,17 +62,41 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [collectionId, setCollectionId] = useState(item?.collection_id ?? initialCollection ?? collections[0]?.id ?? '');
   const [categoryId, setCategoryId] = useState<string>(item?.category_id ?? initialCategory ?? '');
+  const [creatingCollection, setCreatingCollection] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>(item?.visibility ?? 'private');
+  const [acquiredOn, setAcquiredOn] = useState<string | null>(item?.acquired_on ?? todayLocalDate());
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null); const [savedId, setSavedId] = useState(item?.id);
   const [busy, setBusy] = useState(false); const [picking, setPicking] = useState(false); const [error, setError] = useState('');
   const selectedCategories = useMemo(() => categories.filter(category => category.collection_id === collectionId), [categories, collectionId]);
   async function choose(camera: boolean) { setError(''); setPicking(true); try { const next = await pickPhoto(camera); if (next) setPhoto(next); } catch (reason) { setError(messageOf(reason)); } finally { setPicking(false); } }
-  function chooseCollection(id: string) { setCollectionId(id); if (!categories.some(category => category.id === categoryId && category.collection_id === id)) setCategoryId(''); }
+  function chooseCollection(id: string) {
+    if (id === '__new_collection__') { setCollectionId(''); setCreatingCollection(true); setCategoryId(''); return; }
+    setCollectionId(id); setCreatingCollection(false);
+    if (!categories.some(category => category.id === categoryId && category.collection_id === id)) setCategoryId('');
+  }
+  function chooseCategory(id: string) {
+    if (id === '__new_category__') { setCategoryId(''); setCreatingCategory(true); return; }
+    setCategoryId(id); setCreatingCategory(false);
+  }
   async function save() {
-    if (!collectionId) { setError('Choose a collection first.'); return; }
+    if (creatingCollection && !newCollectionName.trim()) { setError('Enter a collection name.'); return; }
+    if (creatingCategory && !newCategoryName.trim()) { setError('Enter a category name.'); return; }
+    try { validateAcquiredDate(acquiredOn); } catch (reason) { setError(messageOf(reason)); return; }
     setBusy(true); setError(''); let metadataSaved = false;
     try {
-      const saved = await repository.saveItem({ title, notes, collectionId, categoryId: categoryId || null, visibility }, savedId);
+      const saved = await repository.saveItem({
+        title,
+        notes,
+        collectionId: collectionId || undefined,
+        newCollectionName: creatingCollection ? newCollectionName : undefined,
+        categoryId: categoryId || null,
+        newCategoryName: creatingCategory ? newCategoryName : undefined,
+        visibility,
+        acquiredOn,
+      }, savedId);
       setSavedId(saved.id); metadataSaved = true;
       if (photo) await repository.uploadPhoto(saved.id, photo);
       onSaved();
@@ -83,14 +104,23 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     finally { setBusy(false); }
   }
   function close() { if (savedId) onSaved(); else onClose(); }
+  const collectionOptions = item
+    ? collections.map(collection => ({ id: collection.id, name: collection.name }))
+    : [{ id: '', name: 'General', subtitle: 'Created if needed' }, ...collections.map(collection => ({ id: collection.id, name: collection.name })), { id: '__new_collection__', name: 'New collection' }];
+  const categoryOptions = item
+    ? [{ id: '', name: 'No category' }, ...selectedCategories.map(category => ({ id: category.id, name: category.name }))]
+    : [{ id: '', name: 'No category' }, ...selectedCategories.map(category => ({ id: category.id, name: category.name })), { id: '__new_category__', name: 'New category' }];
   return <Sheet title={item ? 'Edit item' : 'Add item'} onClose={close} busy={busy || picking}>
     <View style={{ backgroundColor: colors.pale, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', minHeight: 170 }}>
       {photo?.uri || image?.url ? <Image source={{ uri: photo?.uri ?? image?.url }} style={{ width: '100%', height: 200 }} contentFit="contain" cachePolicy="memory" accessibilityLabel="Item photo preview" /> : <View style={{ alignItems: 'center', gap: 10, padding: 25 }}><ImagePlus size={35} color={colors.green} strokeWidth={1.4} /><Text style={ui.muted}>No photo</Text></View>}
     </View>
     {!image ? <View style={ui.row}><Button title={photo ? 'Choose another' : 'Choose photo'} secondary icon={ImagePlus} onPress={() => { void choose(false); }} disabled={busy || picking} style={{ flex: 1 }} /><Button title="Camera" secondary icon={Camera} onPress={() => { void choose(true); }} disabled={busy || picking} /></View> : null}
     <Field label="Item name" placeholder="Item name" value={title} onChangeText={setTitle} maxLength={120} editable={!busy} />
-    <Choices label="Collection" options={collections.map(collection => ({ id: collection.id, name: collection.name }))} value={collectionId} onChange={chooseCollection} disabled={busy} />
-    <Choices label="Category" options={[{ id: '', name: 'No category' }, ...selectedCategories.map(category => ({ id: category.id, name: category.name }))]} value={categoryId} onChange={setCategoryId} disabled={busy} />
+    <Choices label="Collection" options={collectionOptions} value={creatingCollection ? '__new_collection__' : collectionId} onChange={chooseCollection} disabled={busy} />
+    {creatingCollection ? <Field label="New collection name" placeholder="e.g. Bottle caps" value={newCollectionName} onChangeText={setNewCollectionName} maxLength={80} editable={!busy} /> : null}
+    <Choices label="Category" options={categoryOptions} value={creatingCategory ? '__new_category__' : categoryId} onChange={chooseCategory} disabled={busy} />
+    {creatingCategory ? <Field label="New category name" placeholder="e.g. National parks" value={newCategoryName} onChangeText={setNewCategoryName} maxLength={80} editable={!busy} /> : null}
+    <AcquiredDateField value={acquiredOn} onChange={setAcquiredOn} disabled={busy} />
     <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, { id: 'public', name: 'Public' }]} value={visibility} onChange={value => setVisibility(value as 'private' | 'public')} disabled={busy} />
     <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'This item can appear in the public view. Notes stay private.' : 'Only you can view this item.'}</Text>
     <Field label="Notes (optional)" placeholder="Item notes" value={notes} onChangeText={setNotes} maxLength={2000} multiline editable={!busy} />

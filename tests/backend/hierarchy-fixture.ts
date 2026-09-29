@@ -7,6 +7,7 @@ export async function createHierarchyFixture(through = '~') {
     CREATE ROLE anon;
     CREATE ROLE authenticated;
     CREATE ROLE service_role BYPASSRLS;
+    CREATE ROLE supabase_auth_admin;
     CREATE SCHEMA auth;
     CREATE TABLE auth.users(id uuid PRIMARY KEY);
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS

@@ -17,12 +17,19 @@ import { createDemoRepository } from './src/data/demo';
 import type { CollectionRepository } from './src/domain/models';
 import { sharedIdFromUrl } from './src/domain/sharing';
 import { SharedCollectionScreen } from './src/screens/SharedCollectionScreen';
-export default function App() {
+import { GuestExploreScreen } from './src/screens/GuestExploreScreen';
+import { PublicTopicScreen } from './src/screens/PublicTopicScreen';
+import { ThemeProvider, useTheme } from './src/theme/theme';
+export default function App() { return <ThemeProvider><CollectiblesApp /></ThemeProvider>; }
+function CollectiblesApp() {
+  const { effectiveTheme } = useTheme();
   const [fontsLoaded, fontError] = useFonts({ DMSans_400Regular, DMSans_500Medium, DMSans_700Bold, InstrumentSerif_400Regular });
   const { session, loading, recovery, finishRecovery } = useSession();
   const [demo, setDemo] = useState<CollectionRepository | null>(null);
   const [sharedId, setSharedId] = useState<string | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? sharedIdFromUrl(window.location.href) : null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [guestExplore, setGuestExplore] = useState(false);
+  const [previewTopic, setPreviewTopic] = useState<string | null>(null);
   useEffect(() => {
     if (Platform.OS === 'web') {
       const changed = () => setSharedId(sharedIdFromUrl(window.location.href));
@@ -47,13 +54,15 @@ export default function App() {
   } else if (sharedId) {
     content = <SharedCollectionScreen collectionId={sharedId} repository={repository} onBack={leaveSharedView} />;
   } else if (demo) {
-    content = <RepositoryProvider value={demo}><LibraryScreen key="demo" email="Demo collector" onPreviewShared={setPreviewId} onExitDemo={() => { setPreviewId(null); setDemo(null); }} /></RepositoryProvider>;
+    content = <RepositoryProvider value={demo}><LibraryScreen key="demo" email="Demo collector" onPreviewShared={setPreviewId} onPreviewTopic={setPreviewTopic} onExitDemo={() => { setPreviewId(null); setPreviewTopic(null); setDemo(null); }} /></RepositoryProvider>;
   } else if (recovery) {
     content = <RecoveryScreen onDone={finishRecovery} />;
   } else if (session) {
-    content = <RepositoryProvider value={repository}><LibraryScreen key={session.user.id} email={session.user.email ?? 'Your account'} onPreviewShared={setPreviewId} /></RepositoryProvider>;
+    content = <RepositoryProvider value={repository}><LibraryScreen key={session.user.id} email={session.user.email ?? 'Your account'} onPreviewShared={setPreviewId} onPreviewTopic={setPreviewTopic} /></RepositoryProvider>;
+  } else if (guestExplore) {
+    content = <RepositoryProvider value={repository}><GuestExploreScreen onSignIn={() => setGuestExplore(false)} onOpenCollection={setPreviewId} onOpenTopic={setPreviewTopic} /></RepositoryProvider>;
   } else {
-    content = <AuthScreen onDemo={() => setDemo(createDemoRepository())} />;
+    content = <AuthScreen onDemo={() => setDemo(createDemoRepository())} onExplore={() => setGuestExplore(true)} />;
   }
-  return <SafeAreaProvider><StatusBar style="dark" />{content}{previewId ? <Modal visible animationType="slide" onRequestClose={() => setPreviewId(null)}><SharedCollectionScreen collectionId={previewId} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewId(null)} /></Modal> : null}</SafeAreaProvider>;
+  return <SafeAreaProvider><StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />{content}{previewId ? <Modal visible animationType="slide" onRequestClose={() => setPreviewId(null)}><SharedCollectionScreen collectionId={previewId} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewId(null)} /></Modal> : null}{previewTopic ? <Modal visible animationType="slide" onRequestClose={() => setPreviewTopic(null)}><PublicTopicScreen topicKey={previewTopic} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewTopic(null)} onOpenCollection={id => { setPreviewTopic(null); setPreviewId(id); }} /></Modal> : null}</SafeAreaProvider>;
 }

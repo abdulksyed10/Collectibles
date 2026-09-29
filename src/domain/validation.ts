@@ -1,11 +1,15 @@
 import { validateAcquiredDate } from './dates';
-import type { CategoryDraft, CollectionDraft, ItemDraft, ItemVisibility } from './models';
+import type { CategoryDraft, ItemDraft, ItemVisibility } from './models';
 export type ClientConfig = { ready: true; url: string; key: string } | { ready: false; reason: string };
 
-export function validateCollectionSettings(value: Pick<CollectionDraft, 'acquiredOn'>) {
-  const settings: { acquired_on?: string | null } = {};
-  if (value.acquiredOn !== undefined) settings.acquired_on = validateAcquiredDate(value.acquiredOn);
-  return settings;
+export const passwordPolicyMessage = 'Use 8 or more characters with an uppercase letter, a lowercase letter, and a number.';
+
+export function validatePassword(value: string) {
+  if (value.length < 8) throw new Error(passwordPolicyMessage);
+  if (!/[A-Z]/.test(value)) throw new Error(passwordPolicyMessage);
+  if (!/[a-z]/.test(value)) throw new Error(passwordPolicyMessage);
+  if (!/\d/.test(value)) throw new Error(passwordPolicyMessage);
+  return value;
 }
 
 export function validateCategorySettings(value: Pick<CategoryDraft, 'description' | 'acquiredOn'>) {
@@ -15,13 +19,14 @@ export function validateCategorySettings(value: Pick<CategoryDraft, 'description
   return settings;
 }
 
-export function validateItemSettings(value: Pick<ItemDraft, 'visibility' | 'categoryId'>) {
-  const settings: { visibility?: ItemVisibility; category_id?: string | null } = {};
+export function validateItemSettings(value: Pick<ItemDraft, 'visibility' | 'categoryId' | 'acquiredOn'>) {
+  const settings: { visibility?: ItemVisibility; category_id?: string | null; acquired_on?: string | null } = {};
   if (value.visibility !== undefined) {
     if (value.visibility !== 'private' && value.visibility !== 'public') throw new Error('Choose Private or Public.');
     settings.visibility = value.visibility;
   }
   if (value.categoryId !== undefined) settings.category_id = value.categoryId;
+  if (value.acquiredOn !== undefined) settings.acquired_on = validateAcquiredDate(value.acquiredOn);
   return settings;
 }
 

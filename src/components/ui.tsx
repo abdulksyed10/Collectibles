@@ -1,19 +1,21 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
 import { X, type LucideIcon, Layers3 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-export const colors = { paper: '#F8F7F3', card: '#FFFFFF', ink: '#253C35', muted: '#748079', line: '#E4E8E0', green: '#294D40', pale: '#E8EFE8', coral: '#BB6145', sand: '#EFE7D8', danger: '#A53636' };
+export { colors } from '../theme/theme';
+import { colors } from '../theme/theme';
 export const fonts = { body: 'DMSans_400Regular', medium: 'DMSans_500Medium', bold: 'DMSans_700Bold', heading: 'InstrumentSerif_400Regular' };
-export const ui = StyleSheet.create({
+function styles() { return {
   text: { color: colors.ink, fontFamily: fonts.body, fontSize: 15, lineHeight: 23 },
   muted: { color: colors.muted, fontFamily: fonts.body, fontSize: 14, lineHeight: 22 },
   label: { color: colors.ink, fontFamily: fonts.bold, fontSize: 13, marginBottom: 8 },
   title: { fontFamily: fonts.heading, color: colors.ink, fontSize: 42, lineHeight: 46 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  row: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   input: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 14, backgroundColor: colors.card, fontFamily: fonts.body, fontSize: 15, color: colors.ink, minHeight: 50 },
   error: { color: colors.danger, fontFamily: fonts.medium, fontSize: 14, lineHeight: 21 },
   card: { borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, padding: 22 },
-});
+}; }
+export const ui = new Proxy({} as ReturnType<typeof styles>, { get: (_target, key: keyof ReturnType<typeof styles>) => styles()[key] });
 export function Brand({ small = false }: { small?: boolean }) {
   return <View style={ui.row}><View style={{ backgroundColor: colors.green, width: small ? 34 : 42, height: small ? 34 : 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Layers3 size={small ? 19 : 23} color="#FFF" strokeWidth={1.7} /></View><Text style={{ fontFamily: fonts.bold, fontSize: small ? 18 : 22, color: colors.ink, letterSpacing: -0.6 }}>collectibles<Text style={{ color: colors.coral }}>.</Text></Text></View>;
 }

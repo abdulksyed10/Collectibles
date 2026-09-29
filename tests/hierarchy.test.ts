@@ -1,22 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDemoRepository } from '../src/data/demo';
-import { todayLocalDate } from '../src/domain/dates';
 
 test('empty library creates collections before optional categories and private entries', async () => {
   const repo = createDemoRepository({ empty: true });
   assert.deepEqual(await repo.listCollections(), []);
   assert.deepEqual(await repo.listCategories(), []);
   const collection = await repo.saveCollection({ name: 'Pins', description: '' });
-  assert.equal(collection.acquired_on, todayLocalDate());
-  const unknownDate = await repo.saveCollection({ name: 'Undated', description: '', acquiredOn: null });
-  assert.equal(unknownDate.acquired_on, null);
-  assert.equal((await repo.saveCollection({ name: 'Still undated', description: '', }, unknownDate.id)).acquired_on, null);
+  assert.equal(collection.acquired_on, null);
   const category = await repo.saveCategory({ name: 'Parks', collectionId: collection.id });
-  const privateItem = await repo.saveItem({ title: 'Gift pin', notes: '', collectionId: collection.id });
+  const privateItem = await repo.saveItem({ title: 'Gift pin', notes: '', collectionId: collection.id, acquiredOn: '2026-09-28' });
   const publicItem = await repo.saveItem({ title: 'Park pin', notes: '', collectionId: collection.id, categoryId: category.id, visibility: 'public' });
   assert.equal(privateItem.visibility, 'private');
   assert.equal(privateItem.category_id, null);
+  assert.equal(privateItem.acquired_on, '2026-09-28');
   assert.equal(publicItem.visibility, 'public');
   assert.equal(publicItem.category_id, category.id);
   assert.equal((await repo.listItems({ collectionId: collection.id, search: '', page: 0 })).total, 2);

@@ -1,6 +1,6 @@
 import { requireClient } from '../lib/supabase';
-import { escapeSearch, validateCategory, validateCategorySettings, validateCollection, validateCollectionSettings, validateItem, validateItemSettings } from '../domain/validation';
-import type { Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, PublicCollectionPage, PublicEntryPage, SharedCollectionPage } from '../domain/models';
+import { escapeSearch, validateCategory, validateCategorySettings, validateCollection, validateItem, validateItemSettings } from '../domain/validation';
+import type { Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, PublicCollectionPage, PublicEntryPage, PublicTopicDetail, PublicTopicPage, SharedCollectionPage } from '../domain/models';
 import { todayLocalDate } from '../domain/dates';
 import { isCollectionId, validateSharedPage } from '../domain/sharing';
 const PAGE_SIZE = 24;
@@ -43,9 +43,8 @@ export const repository: CollectionRepository = {
     return rows.map(row => ({ id: row.id, owner_id: row.ownerId, name: row.name, description: row.description, acquired_on: row.acquiredOn, created_at: row.createdAt, itemCount: row.itemCount, coverItemId: row.coverItemId, lastUploadedAt: row.lastUploadedAt })) as CollectionSummary[];
   },
   async saveCollection(draft, id) {
-    const value = { ...validateCollection(draft), ...validateCollectionSettings(draft) };
-    const createValue = { ...value, acquired_on: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on };
-    const query = id ? requireClient().from('collections').update(value).eq('id', id) : requireClient().from('collections').insert(createValue);
+    const value = validateCollection(draft);
+    const query = id ? requireClient().from('collections').update(value).eq('id', id) : requireClient().from('collections').insert(value);
     const { data, error } = await query.select().single();
     if (error) throw error;
     return data as Collection;
@@ -80,12 +79,44 @@ export const repository: CollectionRepository = {
     if (error || !data) throw new Error('Unable to load public collections. Try again.');
     return data as PublicCollectionPage;
   },
+  async listPublicTopics(page) {
+    validateSharedPage(page);
+    const { data, error } = await requireClient().rpc('list_public_topics', { p_page: page });
+    if (error || !data) throw new Error('Unable to load public collections. Try again.');
+    return data as PublicTopicPage;
+  },
+  async readPublicTopic(topicKey, page) {
+    if (!topicKey || topicKey.length > 160) throw new Error('Collection unavailable.');
+    validateSharedPage(page);
+    const { data, error } = await requireClient().rpc('get_public_topic', { p_topic_key: topicKey, p_page: page });
+    if (error || !data) throw new Error('Collection unavailable.');
+    return data as PublicTopicDetail;
+  },
   async saveItem(draft, id) {
-    const value = { ...validateItem(draft), ...validateItemSettings(draft), collection_id: draft.collectionId };
-    const query = id
-      ? requireClient().from('items').update(value).eq('id', id)
-      : requireClient().from('items').insert({ ...value, category_id: value.category_id ?? null, visibility: value.visibility ?? 'private' });
-    const { data, error } = await query.select().single();
+    const value = { ...validateItem(draft), ...validateItemSettings(draft) };
+    const newCollectionName = draft.newCollectionName === undefined ? null : validateCollection({ name: draft.newCollectionName, description: '' }).name;
+    const newCategoryName = draft.newCategoryName === undefined ? null : validateCategory({ name: draft.newCategoryName }).name;
+    if (draft.collectionId && newCollectionName) throw new Error('Choose one collection option.');
+    if (draft.categoryId && newCategoryName) throw new Error('Choose one category option.');
+
+    if (id) {
+      if (!draft.collectionId) throw new Error('Choose a collection first.');
+      if (newCollectionName || newCategoryName) throw new Error('Create a new collection or category before moving an existing item.');
+      const { data, error } = await requireClient().from('items').update({ ...value, collection_id: draft.collectionId }).eq('id', id).select().single();
+      if (error) throw error;
+      return data as Item;
+    }
+
+    const { data, error } = await requireClient().rpc('save_item_draft', {
+      p_title: value.title,
+      p_notes: value.notes,
+      p_visibility: value.visibility ?? 'private',
+      p_collection_id: draft.collectionId || null,
+      p_new_collection_name: newCollectionName,
+      p_category_id: value.category_id ?? null,
+      p_new_category_name: newCategoryName,
+      p_acquired_on: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on,
+    });
     if (error) throw error;
     return data as Item;
   },

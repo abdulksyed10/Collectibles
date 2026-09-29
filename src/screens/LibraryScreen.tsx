@@ -12,6 +12,7 @@ import { CollectionNavigator } from '../components/CollectionNavigator';
 import { shareCollectionLink } from '../lib/sharing';
 import { CategoryEditor, CollectionEditor, ConfirmDelete, ItemEditor } from './Editors';
 import { PublicCatalog } from './PublicCatalog';
+import { useTheme, type ThemePreference } from '../theme/theme';
 
 type Dialog =
   | { type: 'category'; category?: Category; collection: Collection }
@@ -22,11 +23,13 @@ type Dialog =
   | { type: 'delete-collection'; collection: Collection }
   | { type: 'delete-category'; category: Category }
   | { type: 'settings' }
+  | { type: 'appearance' }
   | { type: 'delete-account' }
   | null;
 
-export function LibraryScreen({ email, onExitDemo, onPreviewShared }: { email: string; onExitDemo?: () => void; onPreviewShared?: (collectionId: string) => void }) {
+export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTopic }: { email: string; onExitDemo?: () => void; onPreviewShared?: (collectionId: string) => void; onPreviewTopic?: (topicKey: string) => void }) {
   const repository = useRepository();
+  useTheme();
   const { width } = useWindowDimensions();
   const wide = width >= 900;
   const columns = width >= 1180 ? 4 : width >= 620 ? 3 : 2;
@@ -59,7 +62,7 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared }: { email: s
   function changed() { setDialog(null); setShareStatus(''); setShareError(''); library.refresh(); }
   function selectCollection(id?: string) { setCollectionId(id); setCategoryId(undefined); setSearch(''); }
   function selectCategory(parentId: string, id?: string) { setCollectionId(parentId); setCategoryId(id); setSearch(''); }
-  function openAddItem() { if (!library.collections.length) setDialog({ type: 'collection' }); else setDialog({ type: 'item' }); }
+  function openAddItem() { setDialog({ type: 'item' }); }
   function openCategory(parentId: string) {
     const parent = library.collections.find(value => value.id === parentId);
     if (parent) setDialog({ type: 'category', collection: parent });
@@ -79,9 +82,9 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared }: { email: s
   }
   const itemCategory = (item: Item) => library.categories.find(value => value.id === item.category_id);
   const itemCollection = (item: Item) => library.collections.find(value => value.id === item.collection_id);
-  const emptyTitle = query ? 'No matching entries' : !library.collections.length ? 'No collections yet.' : 'No entries yet.';
-  const emptyMessage = query ? 'Try another search.' : !library.collections.length ? 'Create a collection, then add your first entry.' : 'Add an entry to this collection.';
-  const emptyActionLabel = query ? 'Clear search' : !library.collections.length ? 'New collection' : 'Add item';
+  const emptyTitle = query ? 'No matching entries' : !library.collections.length ? 'No entries yet.' : 'No entries yet.';
+  const emptyMessage = query ? 'Try another search.' : !library.collections.length ? 'Add an item to General, or create a collection while you add it.' : 'Add an entry to this collection.';
+  const emptyActionLabel = query ? 'Clear search' : 'Add item';
   function performEmptyAction() { if (query) setSearch(''); else openAddItem(); }
 
   const header = <View style={{ paddingBottom: 16, gap: 14 }}>
@@ -95,7 +98,6 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared }: { email: s
       {category && collectionForCategory ? <Pressable accessibilityRole="button" accessibilityLabel="Edit this category" onPress={() => setDialog({ type: 'category', category, collection: collectionForCategory })} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.line }}><Pencil size={18} color={colors.green} /></Pressable> : collection ? <Pressable accessibilityRole="button" accessibilityLabel="Edit this collection" onPress={() => setDialog({ type: 'collection', collection })} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.line }}><Pencil size={18} color={colors.green} /></Pressable> : null}
     </View>
     {collection?.description ? <Text style={[ui.muted, { maxWidth: 650 }]}>{collection.description}</Text> : null}
-    {collection?.acquired_on ? <Text style={[ui.muted, { fontSize: 12 }]}>Acquired {collection.acquired_on}</Text> : null}
     {collection ? <View style={{ gap: 8 }}><View style={[ui.row, { flexWrap: 'wrap' }]}>{onExitDemo ? null : <Button title="Share collection" icon={Share2} onPress={() => { void shareCollection(collection.id); }} loading={shareBusy} disabled={!hasPublicEntries} />}{onPreviewShared ? <Button title="Preview public view" secondary onPress={() => onPreviewShared(collection.id)} disabled={!hasPublicEntries} /> : null}</View>{!hasPublicEntries ? <Text style={[ui.muted, { fontSize: 12 }]}>Make an entry public to share this collection.</Text> : null}{shareStatus ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{shareStatus}</Text> : null}<ErrorMessage message={shareError} /></View> : null}
     <View style={[ui.row, { gap: 8 }]}><View style={[ui.row, { flex: 1, minWidth: 0, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingLeft: 14, minHeight: 48 }]}><Search size={18} color={colors.muted} /><TextInput accessibilityLabel="Search entries" placeholder="Search entries" placeholderTextColor="#8B968D" value={search} onChangeText={setSearch} style={{ flex: 1, minWidth: 0, fontFamily: fonts.body, fontSize: 14, color: colors.ink, paddingVertical: 12 }} />{search ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={16} color={colors.muted} /></Pressable> : null}</View><Button title="Add item" icon={Plus} onPress={openAddItem} /></View>
     {!wide ? <CollectionNavigator compact collections={library.collections} categories={library.categories} selectedCollectionId={collectionId} selectedCategoryId={categoryId} onSelectCollection={selectCollection} onSelectCategory={selectCategory} onAddCollection={() => setDialog({ type: 'collection' })} onAddCategory={openCategory} /> : null}
@@ -105,7 +107,7 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared }: { email: s
   </View>;
 
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><View style={[ui.row, { paddingHorizontal: wide ? 32 : 16, minHeight: 56, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}><Brand small={!wide} /><Pressable accessibilityRole="button" accessibilityLabel="Account settings" onPress={() => setDialog({ type: 'settings' })} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: colors.pale }}><Text style={{ color: colors.green, fontFamily: fonts.bold }}>{email[0]?.toUpperCase() ?? 'Y'}</Text></Pressable></View>
-    {tab === 'explore' ? <PublicCatalog demo={Boolean(onExitDemo)} onLibrary={() => setTab('library')} onOpen={id => onPreviewShared?.(id)} /> : <View style={{ flex: 1, flexDirection: 'row', width: '100%', maxWidth: 1500, alignSelf: 'center' }}>
+    {tab === 'explore' ? <PublicCatalog demo={Boolean(onExitDemo)} onLibrary={() => setTab('library')} onOpenCollection={id => onPreviewShared?.(id)} onOpenTopic={key => onPreviewTopic?.(key)} /> : <View style={{ flex: 1, flexDirection: 'row', width: '100%', maxWidth: 1500, alignSelf: 'center' }}>
       {wide ? <View style={{ width: 260, padding: 16, borderRightWidth: 1, borderColor: colors.line }}><CollectionNavigator collections={library.collections} categories={library.categories} selectedCollectionId={collectionId} selectedCategoryId={categoryId} onSelectCollection={selectCollection} onSelectCategory={selectCategory} onAddCollection={() => setDialog({ type: 'collection' })} onAddCategory={openCategory} /></View> : null}
       <FlatList key={columns} data={library.items} keyExtractor={item => item.id} numColumns={columns} style={{ flex: 1 }} contentContainerStyle={{ padding: wide ? 32 : 16, paddingBottom: 50, flexGrow: 1 }} ListHeaderComponent={header} refreshControl={<RefreshControl refreshing={library.loading} onRefresh={library.refresh} tintColor={colors.green} />} renderItem={({ item }) => {
         const image = library.images[item.id]; const itemParent = itemCollection(item); const itemGroup = itemCategory(item);
@@ -115,11 +117,23 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared }: { email: s
     {dialog?.type === 'category' ? <CategoryEditor category={dialog.category} collection={dialog.collection} onClose={() => setDialog(null)} onSaved={value => { selectCategory(value.collection_id, value.id); changed(); }} onDelete={() => { if (dialog.category) setDialog({ type: 'delete-category', category: dialog.category }); }} /> : null}
     {dialog?.type === 'collection' ? <CollectionEditor collection={dialog.collection} onClose={() => setDialog(null)} onSaved={value => { selectCollection(value.id); changed(); }} onDelete={() => { if (dialog.collection) setDialog({ type: 'delete-collection', collection: dialog.collection }); }} /> : null}
     {dialog?.type === 'item' ? <ItemEditor item={dialog.item} image={dialog.item ? library.images[dialog.item.id] : undefined} collections={library.collections} categories={library.categories} initialCategory={categoryId} initialCollection={collectionId} onClose={() => setDialog(null)} onSaved={changed} /> : null}
-    {dialog?.type === 'detail' ? <Sheet title={dialog.item.title} onClose={() => setDialog(null)}><View style={{ aspectRatio: 1, backgroundColor: colors.pale, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{library.images[dialog.item.id] ? <Image source={{ uri: library.images[dialog.item.id]!.url }} cachePolicy="memory" style={{ width: '100%', height: '100%' }} contentFit="contain" accessibilityLabel={dialog.item.title} /> : <Package size={60} color="#94A18F" />}</View><Text style={ui.muted}>{itemCollection(dialog.item)?.name ?? 'Collection'}{itemCategory(dialog.item) ? ` / ${itemCategory(dialog.item)?.name}` : ''}</Text><Text style={[ui.muted, { fontSize: 12 }]}>{dialog.item.visibility === 'public' ? 'Public' : 'Private'}</Text>{dialog.item.notes ? <View><Text style={ui.label}>Notes</Text><Text style={ui.text}>{dialog.item.notes}</Text></View> : null}<Text style={[ui.muted, { fontSize: 12 }]}>Added {new Date(dialog.item.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</Text><View style={ui.row}><Button title="Edit item" secondary icon={Pencil} onPress={() => setDialog({ type: 'item', item: dialog.item })} style={{ flex: 1 }} /><Button title="Delete" secondary danger icon={Trash2} onPress={() => setDialog({ type: 'delete-item', item: dialog.item })} /></View></Sheet> : null}
+    {dialog?.type === 'detail' ? <Sheet title={dialog.item.title} onClose={() => setDialog(null)}><View style={{ aspectRatio: 1, backgroundColor: colors.pale, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{library.images[dialog.item.id] ? <Image source={{ uri: library.images[dialog.item.id]!.url }} cachePolicy="memory" style={{ width: '100%', height: '100%' }} contentFit="contain" accessibilityLabel={dialog.item.title} /> : <Package size={60} color="#94A18F" />}</View><Text style={ui.muted}>{itemCollection(dialog.item)?.name ?? 'Collection'}{itemCategory(dialog.item) ? ` / ${itemCategory(dialog.item)?.name}` : ''}</Text><Text style={[ui.muted, { fontSize: 12 }]}>{dialog.item.visibility === 'public' ? 'Public' : 'Private'}</Text>{dialog.item.notes ? <View><Text style={ui.label}>Notes</Text><Text style={ui.text}>{dialog.item.notes}</Text></View> : null}{dialog.item.acquired_on ? <Text style={[ui.muted, { fontSize: 12 }]}>Acquired {dialog.item.acquired_on}</Text> : null}<Text style={[ui.muted, { fontSize: 12 }]}>Added {new Date(dialog.item.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</Text><View style={ui.row}><Button title="Edit item" secondary icon={Pencil} onPress={() => setDialog({ type: 'item', item: dialog.item })} style={{ flex: 1 }} /><Button title="Delete" secondary danger icon={Trash2} onPress={() => setDialog({ type: 'delete-item', item: dialog.item })} /></View></Sheet> : null}
     {dialog?.type === 'delete-item' ? <ConfirmDelete kind="item" name={dialog.item.title} action={() => repository.deleteItem(dialog.item.id)} onClose={() => setDialog(null)} onDeleted={changed} /> : null}
     {dialog?.type === 'delete-collection' ? <ConfirmDelete kind="collection" name={dialog.collection.name} action={() => repository.deleteCollection(dialog.collection.id)} onClose={() => setDialog(null)} onDeleted={() => { selectCollection(undefined); changed(); }} /> : null}
     {dialog?.type === 'delete-category' ? <ConfirmDelete kind="category" name={dialog.category.name} action={() => repository.deleteCategory(dialog.category.id)} onClose={() => setDialog(null)} onDeleted={() => { selectCategory(collectionId ?? '', undefined); changed(); }} /> : null}
-    {dialog?.type === 'settings' ? <Sheet title="Account" onClose={() => setDialog(null)} busy={signingOut}><View><Text style={ui.label}>{onExitDemo ? 'Demo' : 'Signed in as'}</Text><Text style={ui.text}>{email}</Text></View>{onExitDemo ? <Text style={ui.muted}>Demo changes reset when you leave.</Text> : null}<ErrorMessage message={accountError} /><Button title={onExitDemo ? 'Exit demo' : 'Sign out'} secondary icon={LogOut} loading={signingOut} onPress={() => { void signOut(); }} />{!onExitDemo ? <Button title="Delete my account" secondary danger icon={Trash2} disabled={signingOut} onPress={() => setDialog({ type: 'delete-account' })} /> : null}</Sheet> : null}
+    {dialog?.type === 'settings' ? <Sheet title="Account" onClose={() => setDialog(null)} busy={signingOut}><View><Text style={ui.label}>{onExitDemo ? 'Demo' : 'Signed in as'}</Text><Text style={ui.text}>{email}</Text></View>{onExitDemo ? <Text style={ui.muted}>Demo changes reset when you leave.</Text> : null}<Button title="Appearance" secondary onPress={() => setDialog({ type: 'appearance' })} disabled={signingOut} /><ErrorMessage message={accountError} /><Button title={onExitDemo ? 'Exit demo' : 'Sign out'} secondary icon={LogOut} loading={signingOut} onPress={() => { void signOut(); }} />{!onExitDemo ? <Button title="Delete my account" secondary danger icon={Trash2} disabled={signingOut} onPress={() => setDialog({ type: 'delete-account' })} /> : null}</Sheet> : null}
+    {dialog?.type === 'appearance' ? <AppearanceEditor onClose={() => setDialog({ type: 'settings' })} /> : null}
     {dialog?.type === 'delete-account' ? <ConfirmDelete kind="account" name="your account" action={() => repository.deleteAccount()} onClose={() => setDialog(null)} onDeleted={() => { setDialog({ type: 'settings' }); void signOut(); }} /> : null}
   </SafeAreaView>;
+}
+
+function AppearanceEditor({ onClose }: { onClose: () => void }) {
+  const { preference, setPreference } = useTheme();
+  const options: Array<{ id: ThemePreference; title: string; subtitle: string }> = [
+    { id: 'system', title: 'System', subtitle: 'Match your device setting' },
+    { id: 'classic', title: 'Classic', subtitle: 'The original clean palette' },
+    { id: 'fun', title: 'Fun', subtitle: 'A brighter, colorful palette' },
+    { id: 'dark', title: 'Dark', subtitle: 'A dim palette for low light' },
+  ];
+  return <Sheet title="Appearance" onClose={onClose}><Text style={ui.muted}>Choose how Collectibles looks on this device.</Text>{options.map(option => <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={`${option.title} theme`} accessibilityState={{ selected: preference === option.id }} onPress={() => setPreference(option.id)} style={{ padding: 14, borderRadius: 14, borderWidth: 1, borderColor: preference === option.id ? colors.green : colors.line, backgroundColor: preference === option.id ? colors.pale : colors.card, gap: 3 }}><Text style={{ color: colors.ink, fontFamily: fonts.bold }}>{option.title}</Text><Text style={[ui.muted, { fontSize: 12 }]}>{option.subtitle}</Text></Pressable>)}<Button title="Done" onPress={onClose} /></Sheet>;
 }

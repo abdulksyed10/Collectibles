@@ -77,7 +77,7 @@ The `media` function validates user sessions itself and rejects unauthenticated 
 ## 6. Configure Auth and test live behavior
 
 - Configure signups/invites, email confirmation, a real confirmation redirect and email delivery for testers.
-- Use the recovery-code email template in the root README. Match the hosted password minimum to the app and local Auth configuration (at least ten characters).
+- Use the recovery-code email template in the root README. Match the hosted password policy to the app: at least eight characters with uppercase, lowercase, and number requirements. Configure hosted Turnstile and the signup-admission hook using [BACKEND.md](BACKEND.md#auth-admission-and-bot-protection) before broadly enabling signups.
 - Verify with two disposable test accounts: each can manage its own collection and cannot read/edit/sign/delete the other's records or photos.
 - Host the web app and set `EXPO_PUBLIC_WEB_URL` for native share links. Add the hosted origin to the server/bucket origin settings. Verify Explore shows another test account's shared entry and its photo, while excluding notes, categories, dates, owner IDs and storage keys. Switch it back to Private and verify it disappears from Explore and shared links. See [sharing setup](COLLECTION-SHARING.md).
 - Check JPEG uploads, expired URLs, failed-upload retries, collection/account deletion and cleanup of abandoned attempts.

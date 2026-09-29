@@ -13,6 +13,23 @@ This backend requires a user-owned Supabase project and a **private** Cloudflare
 5. Deploy `supabase functions deploy media` and `supabase functions deploy public-media`. JWT verification is performed inside the function with Supabase Auth `getUser(token)`; `verify_jwt=false` avoids the legacy gateway verifier rejecting new asymmetric JWTs. It does **not** permit unauthenticated owner actions. The separate `public-media` function permits anonymous reads only after resolving the canonical/legacy collection scope and confirming the requested item is public. See [collection sharing](COLLECTION-SHARING.md).
 6. Configure the mobile app with only the Supabase URL and publishable/anonymous key described in the root README.
 
+## Auth admission and bot protection
+
+The app requires passwords with at least eight characters, one uppercase letter, one lowercase letter, and one number. Match this in hosted Supabase Auth before opening signups. The client also pauses a device’s sign-in form for 60 seconds after five incorrect attempts in ten minutes, but that is only a user-experience limit; server controls remain authoritative.
+
+To enable Cloudflare Turnstile, create a Turnstile site for the hosted web domain and add its **site key** to the web/EAS build environment as `EXPO_PUBLIC_TURNSTILE_SITE_KEY`. This key is designed to be public. In Supabase Auth settings, enable CAPTCHA, choose Turnstile, and enter the **secret key** there. Do not put the secret in Git, Expo, Vercel public variables, or a native build. The app supplies CAPTCHA tokens for sign-in, signup, and recovery requests when the public site key is configured.
+
+`202609280002_signup_admission.sql` adds a disabled-by-default Before User Created hook named `public.before_user_created_admission(jsonb)`. It stores a keyed digest of a normalized hook IP for two days, never the raw IP, email, password, or CAPTCHA token. Its starting policy is five approved signups/IP/hour, ten/IP/day, and fifty/project/day. The hook is serialized and idempotent by Auth event UUID.
+
+Enable it only after a disposable/staging test:
+
+1. Generate a random secret of at least 32 characters outside the repository. In the SQL Editor, set it in the one private settings row and leave `enabled=false` while testing the function directly.
+2. In Authentication → Hooks, configure **Before User Created** to call the Postgres function `public.before_user_created_admission`. Supabase runs this hook before `auth.users` is written. The function is executable only by `supabase_auth_admin`.
+3. Test a normal signup, a repeated hook event, a same-source limit, a different-source signup, confirmation email delivery, and existing-user sign-in. Then set `enabled=true`.
+4. Set `paused=true` in `private.signup_admission_settings` to stop new accounts immediately; set it back to `false` to resume. This does not sign out existing users. Schedule `select private.purge_signup_admission_events()` daily from a trusted server job.
+
+Keep provider rate limits high enough for normal token refresh. Review signup, email-send, verification, and password request limits separately. See [Supabase Before User Created hooks](https://supabase.com/docs/guides/auth/auth-hooks/before-user-created-hook), [CAPTCHA](https://supabase.com/docs/guides/auth/auth-captcha), and [rate limits](https://supabase.com/docs/guides/auth/rate-limits).
+
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically supplied to hosted Edge Functions. `SUPABASE_DB_URL` is also supplied by hosted Supabase. Set `MEDIA_DATABASE_URL` to the project's transaction pooler URL if its default direct connection is unavailable or unsuitable. The database connection must be server-only. Postgres.js disables prepared statements for transaction pooling and keeps one connection per isolate. Hosted connections verify TLS. Local development must explicitly set `MEDIA_ALLOW_LOCAL_DATABASE=true` with a loopback database hostname.
 
 The default database credential is powerful. For narrower production access, create a dedicated login role with the grants documented at the bottom of the migration and use its pooler URL as `MEDIA_DATABASE_URL`. The Auth admin key remains necessary only to validate sessions and delete the authenticated account.

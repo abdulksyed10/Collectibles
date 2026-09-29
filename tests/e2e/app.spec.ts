@@ -19,6 +19,7 @@ async function fakeBackend(page: Page) {
     const visible = publicItems(collection.id);
     return { id: collection.id, name: collection.name, itemCount: visible.length, coverItemId: visible.find(item => imageIds.has(item.id))?.id ?? null, isOwner: true };
   }
+  function topicKey(name: string) { return (name.toLowerCase().split(/[^a-z0-9]+/).filter(word => word && !['a', 'an', 'the', 'my', 'collection', 'collections'].includes(word)).map(word => word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word).join(' ') || 'collection'); }
 
   await page.route('**/auth/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
@@ -41,6 +42,23 @@ async function fakeBackend(page: Page) {
       const { p_page = 0 } = request.postDataJSON(); const cards = collections.map(publicCard).filter(card => card.itemCount > 0);
       await route.fulfill({ json: { collections: cards.slice(p_page * 24, (p_page + 1) * 24), total: cards.length, hasMore: cards.length > (p_page + 1) * 24 } }); return;
     }
+    if (resource === 'list_public_topics') {
+      const { p_page = 0 } = request.postDataJSON(); const groups = new Map<string, any>();
+      for (const collection of collections) {
+        const card = publicCard(collection); if (!card.itemCount) continue;
+        const key = topicKey(collection.name); const current = groups.get(key);
+        if (current) { current.itemCount += card.itemCount; current.collectionCount += 1; }
+        else groups.set(key, { key, name: collection.name, itemCount: card.itemCount, collectionCount: 1, coverItemId: card.coverItemId, coverCollectionId: card.coverItemId ? collection.id : null });
+      }
+      const topics = [...groups.values()]; await route.fulfill({ json: { topics: topics.slice(p_page * 24, (p_page + 1) * 24), total: topics.length, hasMore: topics.length > (p_page + 1) * 24 } }); return;
+    }
+    if (resource === 'get_public_topic') {
+      const { p_topic_key, p_page = 0 } = request.postDataJSON(); const matches = items.filter(item => item.visibility === 'public' && topicKey(collections.find(collection => collection.id === item.collection_id)?.name ?? '') === p_topic_key);
+      if (!matches.length) { await route.fulfill({ contentType: 'application/json', body: 'null' }); return; }
+      const firstCollection = collections.find(collection => collection.id === matches[0].collection_id)!;
+      const entries = matches.map(item => ({ id: item.id, title: item.title, hasPhoto: imageIds.has(item.id), collectionId: item.collection_id, collectionName: collections.find(collection => collection.id === item.collection_id)?.name ?? 'Collection' }));
+      await route.fulfill({ json: { topic: { key: p_topic_key, name: firstCollection.name }, entries: entries.slice(p_page * 24, (p_page + 1) * 24), total: entries.length, hasMore: entries.length > (p_page + 1) * 24 } }); return;
+    }
     if (resource === 'list_public_entries') {
       const { p_page = 0 } = request.postDataJSON();
       const cards = items.filter(item => item.visibility === 'public').map(item => ({
@@ -57,6 +75,23 @@ async function fakeBackend(page: Page) {
       if (!collection || !visible.length) { await route.fulfill({ contentType: 'application/json', body: 'null' }); return; }
       const sharedCategories = categories.filter(category => category.collection_id === collection.id && visible.some(item => item.category_id === category.id)).map(category => ({ id: category.id, name: category.name }));
       await route.fulfill({ json: { collection: { id: collection.id, name: collection.name }, scope: { collectionId: collection.id, categoryId: null }, categories: sharedCategories, items: visible.slice(p_page * 24, (p_page + 1) * 24).map(item => ({ id: item.id, title: item.title, hasPhoto: imageIds.has(item.id), categoryId: item.category_id, categoryName: categories.find(category => category.id === item.category_id)?.name ?? null })), total: visible.length, hasMore: visible.length > (p_page + 1) * 24 } }); return;
+    }
+    if (resource === 'save_item_draft') {
+      const body = request.postDataJSON();
+      let collectionId = body.p_collection_id;
+      if (body.p_new_collection_name) {
+        const collection = { id: nextId(), owner_id: owner, name: body.p_new_collection_name, description: '', acquired_on: null, created_at: now };
+        collections.push(collection); collectionId = collection.id;
+      }
+      if (!collectionId) {
+        let general = collections.find(collection => collection.name.toLowerCase() === 'general');
+        if (!general) { general = { id: nextId(), owner_id: owner, name: 'General', description: '', acquired_on: null, created_at: now }; collections.push(general); }
+        collectionId = general.id;
+      }
+      let categoryId = body.p_category_id;
+      if (body.p_new_category_name) { const category = { id: nextId(), owner_id: owner, collection_id: collectionId, name: body.p_new_category_name, description: '', acquired_on: null, created_at: now }; categories.push(category); categoryId = category.id; }
+      const row = { id: nextId(), owner_id: owner, title: body.p_title, notes: body.p_notes, collection_id: collectionId, category_id: categoryId ?? null, visibility: body.p_visibility ?? 'private', acquired_on: body.p_acquired_on ?? null, created_at: now, updated_at: now };
+      items.unshift(row); await route.fulfill({ json: row }); return;
     }
     if (resource === 'delete_category') {
       const { p_category_id } = request.postDataJSON(); categories = categories.filter(category => category.id !== p_category_id); items = items.map(item => item.category_id === p_category_id ? { ...item, category_id: null } : item);
@@ -109,16 +144,15 @@ async function signIn(page: Page) {
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 }
 
-test('a fresh account creates a collection before optional categories and defaults entries to private', async ({ page }) => {
+test('a fresh account can add an item with an inline collection and defaults entries to private', async ({ page }) => {
   test.skip(process.env.PLAYWRIGHT_BACKEND_FIXTURE !== 'true', 'Requires fixture backend export.');
   const state = await fakeBackend(page); await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/'); await signIn(page);
   await page.getByRole('button', { name: 'My collections', exact: true }).click();
-  await expect(page.getByText('No collections yet.', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'New collection', exact: true }).first().click();
-  await page.getByLabel('Collection name').fill('Bottle Caps');
-  await page.getByRole('button', { name: 'Create collection', exact: true }).click();
+  await expect(page.getByText('No entries yet.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Add item', exact: true }).first().click();
   await page.getByLabel('Item name').fill('Blue cap');
+  await page.getByRole('button', { name: 'Collection: New collection', exact: true }).click();
+  await page.getByLabel('New collection name').fill('Bottle Caps');
   await expect(page.getByRole('button', { name: 'Visibility: Private', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('dialog').getByRole('button', { name: 'Add item', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open Blue cap', exact: true })).toBeVisible();
