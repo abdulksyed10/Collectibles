@@ -20,6 +20,7 @@ import { SharedCollectionScreen } from './src/screens/SharedCollectionScreen';
 import { GuestExploreScreen } from './src/screens/GuestExploreScreen';
 import { PublicTopicScreen } from './src/screens/PublicTopicScreen';
 import { ThemeProvider, useTheme } from './src/theme/theme';
+import { Analytics } from "@vercel/analytics/react"
 export default function App() { return <ThemeProvider><CollectiblesApp /></ThemeProvider>; }
 function CollectiblesApp() {
   const { effectiveTheme } = useTheme();
