@@ -2,8 +2,17 @@ export function scanFile(path, content) {
   const findings = [];
   const normalized = path.replaceAll('\\', '/');
   if (/(^|\/)\.env(?:\.|$)/.test(normalized) && !normalized.endsWith('/.env.example') && normalized !== '.env.example') findings.push('environment file');
-  if (/(^|\/)(secrets|credentials)\/|\.(pem|key|p12|p8|jks|keystore|mobileprovision)$|(^|\/)service[-_]?account[^/]*\.json$/i.test(normalized)) findings.push('credential file');
+  if (/(^|\/)(secrets|credentials)\/|(^|\/)(?:credentials(?:[-_.][^/]*)?|eas[-_.]?credentials(?:[-_.][^/]*)?|service[-_]?account[^/]*)\.json$|\.(pem|key|p12|p8|jks|keystore|mobileprovision)$/i.test(normalized)) findings.push('credential file');
   if (content.includes('\0')) return findings;
+  try {
+    const parsed = JSON.parse(content);
+    if (
+      parsed && typeof parsed === 'object'
+      && parsed.type === 'service_account'
+      && typeof parsed.private_key === 'string'
+      && typeof parsed.client_email === 'string'
+    ) findings.push('Google service-account credential');
+  } catch { /* Non-JSON source files are expected. */ }
   const rules = [
     ['private key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
     ['Supabase server key', /\bsb_secret_[A-Za-z0-9_-]{20,}/],

@@ -21,6 +21,10 @@ ios/
 *.local
 secrets/
 credentials/
+credentials.json
+credentials-*.json
+credentials_*.json
+eas-credentials*.json
 *.pem
 *.key
 *.p12

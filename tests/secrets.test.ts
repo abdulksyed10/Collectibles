@@ -14,7 +14,22 @@ test('secret scan blocks credentials without printing their contents', () => {
   assert.ok(scanFile('config.ts', token).length);
   assert.ok(scanFile('notes.md', ['postgresql://admin', 'actual-password@db.example.com/app'].join(':')).length);
 });
+test('secret scan blocks EAS and Google credential exports by filename or structure', () => {
+  assert.ok(scanFile('credentials.json', '{"android":{"keystore":{"keystorePath":"key.jks"}}}').length);
+  assert.ok(scanFile('eas-credentials-export.json', '{}').length);
+  assert.ok(scanFile('config.json', JSON.stringify({
+    type: 'service_account',
+    project_id: 'collectibles-prod',
+    private_key_id: 'key-id',
+    private_key: 'redacted-for-test',
+    client_email: 'release@collectibles-prod.iam.gserviceaccount.com',
+  })).length);
+});
 test('publishable configuration and code that reads secret names are allowed', () => {
   assert.equal(scanFile('src/config.ts', `const key = '${['sb', 'publishable', 'A'.repeat(40)].join('_')}'`).length, 0);
   assert.equal(scanFile('server.ts', 'const secret = Deno.env.get("R2_SECRET_ACCESS_KEY");').length, 0);
+  assert.deepEqual(
+    scanFile('eas.json', JSON.stringify({ expo: { extra: { eas: { projectId: 'public-project-id' } } } })),
+    [],
+  );
 });
