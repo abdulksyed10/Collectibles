@@ -9,7 +9,7 @@ export const clientConfig = readClientConfig(process.env.EXPO_PUBLIC_SUPABASE_UR
 export const backendEnabled = process.env.EXPO_PUBLIC_ENABLE_BACKEND === 'true';
 export const serviceReady = backendEnabled && clientConfig.ready;
 // Native sessions stay in Keychain/Keystore. Chunking accommodates larger sessions.
-const secureStorage = {
+export const authStorage = {
   async getItem(key: string) {
     if (Platform.OS === 'web') return typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(key);
     const count = Number(await SecureStore.getItemAsync(`${key}.count`));
@@ -33,7 +33,7 @@ const secureStorage = {
   },
 };
 export const supabase = backendEnabled && clientConfig.ready ? createClient(clientConfig.url, clientConfig.key, {
-  auth: { storage: secureStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: Platform.OS === 'web', lock: processLock },
+  auth: { storage: authStorage, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, flowType: 'pkce', lock: processLock },
 }) : null;
 export function requireClient() {
   if (!supabase) throw new Error('The collection service has not been connected yet.');

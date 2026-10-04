@@ -7,7 +7,8 @@
     "userInterfaceStyle": "light",
     "scheme": "collectibles",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "usesAppleSignIn": true
     },
     "android": {
       "predictiveBackGestureEnabled": true
@@ -29,7 +30,9 @@
       "expo-secure-store",
       "expo-font",
       "expo-image",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser",
+      "expo-apple-authentication"
     ]
   }
 }

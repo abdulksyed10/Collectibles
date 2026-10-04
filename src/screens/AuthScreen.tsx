@@ -8,8 +8,9 @@ import { Brand, Button, colors, ErrorMessage, Field, fonts, messageOf, ui } from
 import { CollectionArtwork } from '../components/CollectionArtwork';
 import { validatePassword } from '../domain/validation';
 import { CaptchaChallenge } from '../components/CaptchaChallenge';
+import { SocialSignInButtons } from '../components/SocialSignInButtons';
 import { authOperationForMode, mapAuthError, recordCredentialFailure, secondsUntil, type AuthOperation } from '../auth/security';
-export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplore: () => void }) {
+export function AuthScreen({ onDemo, onExplore, callbackError }: { onDemo: () => void; onExplore: () => void; callbackError?: string }) {
   const wide = useWindowDimensions().width >= 860;
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'verify'>('signin');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [code, setCode] = useState('');
@@ -27,6 +28,7 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
   const operationPaused = cooldownSeconds > 0;
   const handleCaptchaToken = useCallback((token: string) => { setCaptchaToken(token); setError(''); }, []);
   const handleCaptchaError = useCallback(() => setCaptchaToken(null), []);
+  useEffect(() => { if (callbackError) setError(callbackError); }, [callbackError]);
   useEffect(() => {
     if (!Object.values(cooldowns).some(value => value && value > Date.now())) return;
     const interval = setInterval(() => setNow(Date.now()), 1_000);
@@ -109,6 +111,7 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
       {mode === 'signin' || mode === 'signup' ? <View><Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'signup' ? '8+ characters, upper, lower, number' : 'Your password'} secureTextEntry={!visible} autoCapitalize="none" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} editable={!busy} onSubmitEditing={submit} style={{ paddingRight: 52 }} /><Pressable accessibilityRole="button" accessibilityLabel={visible ? 'Hide password' : 'Show password'} onPress={() => setVisible(!visible)} style={{ position: 'absolute', right: 14, bottom: 14 }}>{visible ? <EyeOff size={21} color={colors.muted} /> : <Eye size={21} color={colors.muted} />}</Pressable></View> : null}
       {mode === 'verify' ? <Field label="Recovery code" value={code} onChangeText={setCode} placeholder="Code from your email" keyboardType="number-pad" autoComplete="one-time-code" editable={!busy} /> : null}
       {mode === 'signin' ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => change('reset')} style={{ alignSelf: 'flex-end' }}><Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 13 }}>Forgot password?</Text></Pressable> : null}
+      {mode === 'signin' ? <SocialSignInButtons disabled={!serviceReady || busy} onError={setError} /> : null}
       {captchaApplies ? <CaptchaChallenge key={`${mode}-${captchaVersion}`} siteKey={captchaSiteKey} onToken={handleCaptchaToken} onError={handleCaptchaError} /> : null}
       {operationPaused ? <Text accessibilityRole="alert" style={[ui.muted, { fontSize: 13 }]}>Wait {cooldownSeconds} seconds before trying again.</Text> : null}
       <ErrorMessage message={error} />{notice ? <Text accessibilityRole="alert" style={[ui.text, { color: colors.green, fontSize: 14 }]}>{notice}</Text> : null}

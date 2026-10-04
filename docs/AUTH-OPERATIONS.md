@@ -53,3 +53,6 @@ Verify in the hosted dashboard, without exporting any secrets:
 - rate-limit responses include an appropriate retry window.
 
 References: [Supabase password security](https://supabase.com/docs/guides/auth/password-security), [Before User Created hook](https://supabase.com/docs/guides/auth/auth-hooks/before-user-created-hook), and [Password Verification hook](https://supabase.com/docs/guides/auth/auth-hooks/password-verification-hook).
+# OAuth providers
+
+See [Google and Apple sign-in setup](OAUTH-SETUP.md) for the provider dashboard steps, allowed callback URLs, secret placement, and the required real-device acceptance checks. `EXPO_PUBLIC_ENABLE_SOCIAL_LOGIN` remains false until those checks pass.

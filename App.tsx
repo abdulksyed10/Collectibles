@@ -20,7 +20,7 @@ import { SharedCollectionScreen } from './src/screens/SharedCollectionScreen';
 import { GuestExploreScreen } from './src/screens/GuestExploreScreen';
 import { PublicTopicScreen } from './src/screens/PublicTopicScreen';
 import { ThemeProvider, useTheme } from './src/theme/theme';
-import { Analytics } from "@vercel/analytics/react"
+import { handleAuthCallback } from './src/auth/oauth';
 export default function App() { return <ThemeProvider><CollectiblesApp /></ThemeProvider>; }
 function CollectiblesApp() {
   const { effectiveTheme } = useTheme();
@@ -31,15 +31,43 @@ function CollectiblesApp() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [guestExplore, setGuestExplore] = useState(false);
   const [previewTopic, setPreviewTopic] = useState<string | null>(null);
+  const [callbackError, setCallbackError] = useState('');
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      const changed = () => setSharedId(sharedIdFromUrl(window.location.href));
-      window.addEventListener('popstate', changed);
-      return () => window.removeEventListener('popstate', changed);
-    }
     let active = true;
-    void Linking.getInitialURL().then(url => { if (active) setSharedId(sharedIdFromUrl(url)); });
-    const listener = Linking.addEventListener('url', event => setSharedId(sharedIdFromUrl(event.url)));
+    const processUrl = async (url: string | null) => {
+      if (!url) return;
+      try {
+        const callback = await handleAuthCallback(url);
+        if (!active) return;
+        if (callback === 'handled') {
+          setCallbackError('');
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const clean = new URL(window.location.href);
+            clean.pathname = '/'; clean.search = ''; clean.hash = '';
+            window.history.replaceState({}, '', clean.toString());
+          }
+          return;
+        }
+      } catch (error) {
+        if (!active) return;
+        setCallbackError(error instanceof Error ? error.message : 'Social sign-in could not be completed. Please try again.');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const clean = new URL(window.location.href);
+          clean.pathname = '/'; clean.search = ''; clean.hash = '';
+          window.history.replaceState({}, '', clean.toString());
+        }
+        return;
+      }
+      if (active) setSharedId(sharedIdFromUrl(url));
+    };
+    if (Platform.OS === 'web') {
+      void processUrl(window.location.href);
+      const changed = () => { void processUrl(window.location.href); };
+      window.addEventListener('popstate', changed);
+      return () => { active = false; window.removeEventListener('popstate', changed); };
+    }
+    void Linking.getInitialURL().then(processUrl);
+    const listener = Linking.addEventListener('url', event => { void processUrl(event.url); });
     return () => { active = false; listener.remove(); };
   }, []);
   function leaveSharedView() {
@@ -63,7 +91,7 @@ function CollectiblesApp() {
   } else if (guestExplore) {
     content = <RepositoryProvider value={repository}><GuestExploreScreen onSignIn={() => setGuestExplore(false)} onOpenCollection={setPreviewId} onOpenTopic={setPreviewTopic} /></RepositoryProvider>;
   } else {
-    content = <AuthScreen onDemo={() => setDemo(createDemoRepository())} onExplore={() => setGuestExplore(true)} />;
+    content = <AuthScreen onDemo={() => setDemo(createDemoRepository())} onExplore={() => setGuestExplore(true)} callbackError={callbackError} />;
   }
   return <SafeAreaProvider><StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />{content}{previewId ? <Modal visible animationType="slide" onRequestClose={() => setPreviewId(null)}><SharedCollectionScreen collectionId={previewId} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewId(null)} /></Modal> : null}{previewTopic ? <Modal visible animationType="slide" onRequestClose={() => setPreviewTopic(null)}><PublicTopicScreen topicKey={previewTopic} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewTopic(null)} onOpenCollection={id => { setPreviewTopic(null); setPreviewId(id); }} /></Modal> : null}</SafeAreaProvider>;
 }
