@@ -8,7 +8,7 @@ import { Brand, Button, colors, ErrorMessage, Field, fonts, messageOf, ui } from
 import { CollectionArtwork } from '../components/CollectionArtwork';
 import { validatePassword } from '../domain/validation';
 import { CaptchaChallenge } from '../components/CaptchaChallenge';
-import { mapAuthError, recordCredentialFailure, secondsUntil } from '../auth/security';
+import { authOperationForMode, mapAuthError, recordCredentialFailure, secondsUntil, type AuthOperation } from '../auth/security';
 export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplore: () => void }) {
   const wide = useWindowDimensions().width >= 860;
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'verify'>('signin');
@@ -17,28 +17,38 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaVersion, setCaptchaVersion] = useState(0);
   const [credentialFailures, setCredentialFailures] = useState<number[]>([]);
-  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldowns, setCooldowns] = useState<Partial<Record<AuthOperation, number>>>({});
+  const [canResendConfirmation, setCanResendConfirmation] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const captchaSiteKey = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY?.trim() || '';
   const captchaApplies = Boolean(captchaSiteKey) && mode !== 'verify';
-  const cooldownSeconds = secondsUntil(cooldownUntil, now);
-  const signInPaused = mode === 'signin' && cooldownSeconds > 0;
+  const operation = authOperationForMode(mode);
+  const cooldownSeconds = secondsUntil(cooldowns[operation] ?? null, now);
+  const operationPaused = cooldownSeconds > 0;
   const handleCaptchaToken = useCallback((token: string) => { setCaptchaToken(token); setError(''); }, []);
   const handleCaptchaError = useCallback(() => setCaptchaToken(null), []);
   useEffect(() => {
-    if (!cooldownUntil || cooldownUntil <= Date.now()) return;
+    if (!Object.values(cooldowns).some(value => value && value > Date.now())) return;
     const interval = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(interval);
-  }, [cooldownUntil]);
+  }, [cooldowns]);
   useEffect(() => {
-    if (cooldownUntil && cooldownUntil <= now) setCooldownUntil(null);
-  }, [cooldownUntil, now]);
+    setCooldowns(current => {
+      const active = Object.fromEntries(Object.entries(current).filter(([, value]) => value && value > now)) as Partial<Record<AuthOperation, number>>;
+      return Object.keys(active).length === Object.keys(current).length ? current : active;
+    });
+  }, [now]);
   function resetCaptcha() { setCaptchaToken(null); setCaptchaVersion(value => value + 1); }
-  function change(next: typeof mode) { setMode(next); setError(''); setNotice(''); setPassword(''); resetCaptcha(); }
+  function setCooldown(operationName: AuthOperation, retryAt: number | null | undefined) {
+    if (!retryAt) return;
+    setCooldowns(current => ({ ...current, [operationName]: retryAt }));
+    setNow(Date.now());
+  }
+  function change(next: typeof mode) { setMode(next); setError(''); setNotice(''); setPassword(''); setCanResendConfirmation(false); resetCaptcha(); }
   async function submit() {
     if (!serviceReady || busy) return;
     const submittedAt = Date.now();
-    if (mode === 'signin' && secondsUntil(cooldownUntil, submittedAt) > 0) { setError(`Wait ${secondsUntil(cooldownUntil, submittedAt)} seconds before trying again.`); return; }
+    if (secondsUntil(cooldowns[operation] ?? null, submittedAt) > 0) { setError(`Wait ${secondsUntil(cooldowns[operation] ?? null, submittedAt)} seconds before trying again.`); return; }
     setError(''); setNotice('');
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setError('Enter a valid email address.'); return; }
     if (mode === 'signin' && !password) { setError('Enter your password.'); return; }
@@ -48,8 +58,8 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
     const token = captchaToken ?? undefined;
     if (captchaApplies) setCaptchaToken(null);
     try {
-      if (mode === 'signin') { await auth.signIn(email, password, token); setCredentialFailures([]); setCooldownUntil(null); }
-      if (mode === 'signup') { const signedIn = await auth.signUp(email, password, token); if (!signedIn) { change('signin'); setNotice('Check your email to confirm your account, then sign in here.'); } }
+      if (mode === 'signin') { await auth.signIn(email, password, token); setCredentialFailures([]); setCooldowns(current => ({ ...current, signin: undefined })); }
+      if (mode === 'signup') { const signedIn = await auth.signUp(email, password, token); if (!signedIn) { change('signin'); setCanResendConfirmation(true); setNotice('Check your email to confirm your account, then sign in here.'); } }
       if (mode === 'reset') { await auth.sendReset(email, token); setMode('verify'); setNotice('If this email has an account, a recovery email is on its way. Enter its code below.'); }
       if (mode === 'verify') await auth.verifyReset(email, code);
     } catch (e) {
@@ -57,12 +67,29 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
       if (mode === 'signin' && issue.kind === 'credentials') {
         const outcome = recordCredentialFailure(credentialFailures, submittedAt);
         setCredentialFailures(outcome.failures);
-        if (outcome.retryAt) { setCooldownUntil(outcome.retryAt); setNow(submittedAt); setError('Too many incorrect attempts. Wait 60 seconds before trying again.'); }
+        if (outcome.retryAt) { setCooldown('signin', outcome.retryAt); setError('Too many incorrect attempts. Wait one hour before trying again.'); }
         else setError(issue.message);
       } else {
-        if (issue.retryAt) { setCooldownUntil(issue.retryAt); setNow(submittedAt); }
+        setCooldown(operation, issue.retryAt);
         setError(issue.message);
       }
+    } finally { if (captchaApplies) resetCaptcha(); setBusy(false); }
+  }
+  async function resendConfirmation() {
+    if (!serviceReady || busy) return;
+    const submittedAt = Date.now();
+    if (secondsUntil(cooldowns.resend ?? null, submittedAt) > 0) { setError(`Wait ${secondsUntil(cooldowns.resend ?? null, submittedAt)} seconds before trying again.`); return; }
+    setError(''); setNotice('');
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setError('Enter the email address you used to sign up.'); return; }
+    if (captchaApplies && !captchaToken) { setError('Complete the security check first.'); return; }
+    setBusy(true);
+    const token = captchaToken ?? undefined;
+    if (captchaApplies) setCaptchaToken(null);
+    try { await auth.resendConfirmation(email, token); setNotice('If this email has an unconfirmed account, a new confirmation email is on its way.'); }
+    catch (reason) {
+      const issue = mapAuthError(reason, submittedAt);
+      setCooldown('resend', issue.retryAt);
+      setError(issue.message);
     } finally { if (captchaApplies) resetCaptcha(); setBusy(false); }
   }
   const heading = mode === 'signup' ? 'A home for your finds.' : mode === 'reset' ? 'Let’s get you back in.' : mode === 'verify' ? 'Check your inbox.' : 'Welcome to your collection.';
@@ -83,9 +110,10 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
       {mode === 'verify' ? <Field label="Recovery code" value={code} onChangeText={setCode} placeholder="Code from your email" keyboardType="number-pad" autoComplete="one-time-code" editable={!busy} /> : null}
       {mode === 'signin' ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => change('reset')} style={{ alignSelf: 'flex-end' }}><Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 13 }}>Forgot password?</Text></Pressable> : null}
       {captchaApplies ? <CaptchaChallenge key={`${mode}-${captchaVersion}`} siteKey={captchaSiteKey} onToken={handleCaptchaToken} onError={handleCaptchaError} /> : null}
-      {signInPaused ? <Text accessibilityRole="alert" style={[ui.muted, { fontSize: 13 }]}>Wait {cooldownSeconds} seconds before trying again.</Text> : null}
+      {operationPaused ? <Text accessibilityRole="alert" style={[ui.muted, { fontSize: 13 }]}>Wait {cooldownSeconds} seconds before trying again.</Text> : null}
       <ErrorMessage message={error} />{notice ? <Text accessibilityRole="alert" style={[ui.text, { color: colors.green, fontSize: 14 }]}>{notice}</Text> : null}
-      <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery email' : 'Verify code'} onPress={submit} loading={busy} disabled={!serviceReady || signInPaused || (captchaApplies && !captchaToken)} icon={ArrowRight} />
+      <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery email' : 'Verify code'} onPress={submit} loading={busy} disabled={!serviceReady || operationPaused || (captchaApplies && !captchaToken)} icon={ArrowRight} />
+      {mode === 'signin' && canResendConfirmation ? <Button title="Resend confirmation email" secondary onPress={() => { void resendConfirmation(); }} loading={busy} disabled={!serviceReady || Boolean(cooldowns.resend && cooldowns.resend > now) || (captchaApplies && !captchaToken)} /> : null}
       </View>
       <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Collectibles?' : mode === 'signup' ? 'Already have an account?' : ''}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => change(mode === 'signin' ? 'signup' : 'signin')}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
       <View style={[ui.row, { justifyContent: 'center', paddingTop: 12 }]}><LockKeyhole size={13} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Entries stay private until you make them public.</Text></View>

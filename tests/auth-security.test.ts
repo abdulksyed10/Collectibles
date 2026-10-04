@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mapAuthError, recordCredentialFailure } from '../src/auth/security.ts';
+import { authOperationForMode, mapAuthError, recordCredentialFailure } from '../src/auth/security.ts';
 
 test('invalid credentials use the same message and pause this form after five recent failures', () => {
   const now = 1_000_000;
@@ -8,7 +8,9 @@ test('invalid credentials use the same message and pause this form after five re
   const failures = [now - 9 * 60_000, now - 8 * 60_000, now - 7 * 60_000, now - 6 * 60_000];
   const outcome = recordCredentialFailure(failures, now);
   assert.equal(outcome.failures.length, 5);
-  assert.equal(outcome.retryAt, now + 60_000);
+  assert.equal(outcome.retryAt, now + 60 * 60_000);
+  assert.equal(authOperationForMode('reset'), 'recover');
+  assert.equal(authOperationForMode('verify'), 'verify');
 });
 
 test('rate limits use a server retry hint when supplied and failures outside the window do not count', () => {

@@ -1,8 +1,15 @@
 export type AuthIssue = 'credentials' | 'rate-limit' | 'captcha' | 'network' | 'other';
 export type AuthIssueResult = { kind: AuthIssue; message: string; retryAt?: number };
+export type AuthOperation = 'signin' | 'signup' | 'recover' | 'verify' | 'resend';
+export type AuthMode = 'signin' | 'signup' | 'reset' | 'verify';
 
 const credentialWindowMs = 10 * 60_000;
 const localPauseMs = 60_000;
+const credentialPauseMs = 60 * 60_000;
+
+export function authOperationForMode(mode: AuthMode): AuthOperation {
+  return mode === 'reset' ? 'recover' : mode;
+}
 
 function errorDetails(error: unknown) {
   if (error && typeof error === 'object') {
@@ -40,7 +47,7 @@ export function mapAuthError(error: unknown, now: number, retryAfter?: string): 
 
 export function recordCredentialFailure(previous: number[], now: number) {
   const failures = [...previous.filter(timestamp => timestamp > now - credentialWindowMs), now];
-  return { failures, retryAt: failures.length >= 5 ? now + localPauseMs : null };
+  return { failures, retryAt: failures.length >= 5 ? now + credentialPauseMs : null };
 }
 
 export function secondsUntil(deadline: number | null, now: number) {
