@@ -1,16 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Camera, Check, ImagePlus, Plus, Trash2 } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import type { Category, Collection, Item, ItemImage, PreparedPhoto } from '../domain/models';
 import { useRepository } from '../data/RepositoryProvider';
 import { pickPhoto } from '../lib/photos';
-import { todayLocalDate, validateAcquiredDate } from '../domain/dates';
+import { validateAcquiredDate } from '../domain/dates';
+import { confirmPhotoUpload, initialItemAcquiredOn, savedItemPlacement } from '../domain/itemPhoto';
 import { AcquiredDateField } from '../components/AcquiredDateField';
 import { Button, colors, ErrorMessage, Field, fonts, messageOf, Sheet, ui } from '../components/ui';
 
 function Choices({ label, options, value, onChange, disabled }: { label: string; options: { id: string; name: string; subtitle?: string }[]; value: string; onChange: (id: string) => void; disabled?: boolean }) {
   return <View><Text style={ui.label}>{label}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{options.map(option => <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={`${label}: ${option.name}`} accessibilityState={{ selected: value === option.id }} {...(Platform.OS === 'web' ? { 'aria-pressed': value === option.id } : {})} onPress={() => onChange(option.id)} disabled={disabled} style={{ minHeight: 48, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 12, backgroundColor: value === option.id ? colors.green : colors.card, borderWidth: 1, borderColor: colors.line }}><Text style={{ fontFamily: fonts.medium, color: value === option.id ? '#FFF' : colors.ink }}>{option.name}</Text>{option.subtitle ? <Text style={{ color: value === option.id ? '#E8EFE8' : colors.muted, fontSize: 11 }}>{option.subtitle}</Text> : null}</Pressable>)}</ScrollView></View>;
+}
+
+type CollectionChoice = Pick<Collection, 'id' | 'name'>;
+type CategoryChoice = Pick<Category, 'id' | 'name' | 'collection_id'>;
+function mergeChoices<T extends { id: string }>(current: T[], incoming: T[]) {
+  return [...incoming, ...current.filter(value => !incoming.some(next => next.id === value.id))];
 }
 
 export function CategoryEditor({ category, collection, onClose, onSaved, onDelete }: { category?: Category; collection: Collection; onClose: () => void; onSaved: (value: Category) => void; onDelete: () => void }) {
@@ -67,15 +74,19 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>(item?.visibility ?? 'private');
-  const [acquiredOn, setAcquiredOn] = useState<string | null>(item?.acquired_on ?? todayLocalDate());
+  const [acquiredOn, setAcquiredOn] = useState<string | null>(initialItemAcquiredOn(item));
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null); const [savedId, setSavedId] = useState(item?.id);
   const [busy, setBusy] = useState(false); const [picking, setPicking] = useState(false); const [error, setError] = useState('');
-  const selectedCategories = useMemo(() => categories.filter(category => category.collection_id === collectionId), [categories, collectionId]);
+  const [collectionChoices, setCollectionChoices] = useState<CollectionChoice[]>(() => collections.map(collection => ({ id: collection.id, name: collection.name })));
+  const [categoryChoices, setCategoryChoices] = useState<CategoryChoice[]>(() => categories.map(category => ({ id: category.id, name: category.name, collection_id: category.collection_id })));
+  useEffect(() => { setCollectionChoices(current => mergeChoices(current, collections.map(collection => ({ id: collection.id, name: collection.name })))); }, [collections]);
+  useEffect(() => { setCategoryChoices(current => mergeChoices(current, categories.map(category => ({ id: category.id, name: category.name, collection_id: category.collection_id })))); }, [categories]);
+  const selectedCategories = useMemo(() => categoryChoices.filter(category => category.collection_id === collectionId), [categoryChoices, collectionId]);
   async function choose(camera: boolean) { setError(''); setPicking(true); try { const next = await pickPhoto(camera); if (next) setPhoto(next); } catch (reason) { setError(messageOf(reason)); } finally { setPicking(false); } }
   function chooseCollection(id: string) {
     if (id === '__new_collection__') { setCollectionId(''); setCreatingCollection(true); setCategoryId(''); return; }
     setCollectionId(id); setCreatingCollection(false);
-    if (!categories.some(category => category.id === categoryId && category.collection_id === id)) setCategoryId('');
+    if (!categoryChoices.some(category => category.id === categoryId && category.collection_id === id)) setCategoryId('');
   }
   function chooseCategory(id: string) {
     if (id === '__new_category__') { setCategoryId(''); setCreatingCategory(true); return; }
@@ -97,16 +108,26 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
         visibility,
         acquiredOn,
       }, savedId);
-      setSavedId(saved.id); metadataSaved = true;
-      if (photo) await repository.uploadPhoto(saved.id, photo);
+      const placement = savedItemPlacement(saved);
+      const createdCollectionName = creatingCollection ? newCollectionName.trim() : collectionChoices.find(collection => collection.id === placement.collectionId)?.name ?? 'General';
+      const createdCategoryName = creatingCategory ? newCategoryName.trim() : categoryChoices.find(category => category.id === placement.categoryId)?.name ?? '';
+      setSavedId(placement.id);
+      setCollectionId(placement.collectionId);
+      setCategoryId(placement.categoryId ?? '');
+      setCreatingCollection(false); setNewCollectionName('');
+      setCreatingCategory(false); setNewCategoryName('');
+      setCollectionChoices(current => current.some(collection => collection.id === placement.collectionId) ? current : [...current, { id: placement.collectionId, name: createdCollectionName }]);
+      if (placement.categoryId) setCategoryChoices(current => current.some(category => category.id === placement.categoryId) ? current : [...current, { id: placement.categoryId!, name: createdCategoryName || 'Category', collection_id: placement.collectionId }]);
+      metadataSaved = true;
+      if (photo) await confirmPhotoUpload(repository, placement.id, photo);
       onSaved();
     } catch (reason) { setError(`${metadataSaved && photo ? 'Your item details are saved. The photo was not confirmed; you can retry or close and check your item. ' : ''}${messageOf(reason)}`); }
     finally { setBusy(false); }
   }
   function close() { if (savedId) onSaved(); else onClose(); }
   const collectionOptions = item
-    ? collections.map(collection => ({ id: collection.id, name: collection.name }))
-    : [{ id: '', name: 'General', subtitle: 'Created if needed' }, ...collections.map(collection => ({ id: collection.id, name: collection.name })), { id: '__new_collection__', name: 'New collection' }];
+    ? collectionChoices
+    : [{ id: '', name: 'General', subtitle: 'Created if needed' }, ...collectionChoices, { id: '__new_collection__', name: 'New collection' }];
   const categoryOptions = item
     ? [{ id: '', name: 'No category' }, ...selectedCategories.map(category => ({ id: category.id, name: category.name }))]
     : [{ id: '', name: 'No category' }, ...selectedCategories.map(category => ({ id: category.id, name: category.name })), { id: '__new_category__', name: 'New category' }];
