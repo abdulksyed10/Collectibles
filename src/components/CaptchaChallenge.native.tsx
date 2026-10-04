@@ -1,23 +1,82 @@
-import React, { useMemo, useRef } from 'react';
-import { Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Text, View, useColorScheme } from 'react-native';
+import * as Crypto from 'expo-crypto';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { colors, ui } from './ui';
+import { buildCaptchaPageUrl, isAllowedCaptchaNavigation, isExpectedCaptchaPage, parseCaptchaMessage } from '../auth/captchaMessages';
+import { Button, colors, ui } from './ui';
 
-function validToken(token: unknown): token is string { return typeof token === 'string' && token.length >= 20 && token.length <= 4096; }
+function bytesToNonce(bytes: Uint8Array) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
 
 export function CaptchaChallenge({ siteKey, onToken, onError }: { siteKey: string; onToken: (token: string) => void; onError: () => void }) {
-  const nonce = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`).current;
-  const html = useMemo(() => `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:transparent}</style></head><body><div id="challenge"></div><script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"></script><script>window.onload=function(){turnstile.render('#challenge',{sitekey:${JSON.stringify(siteKey)},callback:function(token){window.ReactNativeWebView.postMessage(JSON.stringify({type:'token',nonce:${JSON.stringify(nonce)},token:token}))},'error-callback':function(){window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',nonce:${JSON.stringify(nonce)}))},'expired-callback':function(){window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',nonce:${JSON.stringify(nonce)}))}})}</script></body></html>`, [nonce, siteKey]);
+  const callbacks = useRef({ onToken, onError });
+  const accepted = useRef(false);
+  const colorScheme = useColorScheme();
+  const [attempt, setAttempt] = useState(0);
+  const [nonce, setNonce] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL?.trim() || '';
+
+  useEffect(() => { callbacks.current = { onToken, onError }; }, [onError, onToken]);
+  useEffect(() => {
+    let active = true;
+    accepted.current = false;
+    setNonce(null);
+    setLoadError(false);
+    Crypto.getRandomBytesAsync(24)
+      .then(bytes => { if (active) setNonce(bytesToNonce(bytes)); })
+      .catch(() => {
+        if (!active) return;
+        setLoadError(true);
+        callbacks.current.onError();
+      });
+    return () => { active = false; };
+  }, [attempt, siteKey]);
+
+  const pageUrl = useMemo(() => {
+    if (!nonce || !configuredWebUrl) return null;
+    try { return buildCaptchaPageUrl(configuredWebUrl, siteKey, nonce, colorScheme === 'dark' ? 'dark' : 'light'); }
+    catch { return null; }
+  }, [colorScheme, configuredWebUrl, nonce, siteKey]);
+
+  useEffect(() => {
+    if (!nonce || pageUrl || loadError) return;
+    setLoadError(true);
+    callbacks.current.onError();
+  }, [loadError, nonce, pageUrl]);
+
+  function retry() { setAttempt(value => value + 1); }
   function handleMessage(event: WebViewMessageEvent) {
-    try {
-      const data = JSON.parse(event.nativeEvent.data) as { type?: unknown; nonce?: unknown; token?: unknown };
-      if (data.nonce !== nonce) return;
-      if (data.type === 'token' && validToken(data.token)) onToken(data.token);
-      else if (data.type === 'error') onError();
-    } catch { onError(); }
+    if (!pageUrl || !isExpectedCaptchaPage(event.nativeEvent.url, pageUrl)) return;
+    const message = parseCaptchaMessage(event.nativeEvent.data, nonce ?? '');
+    if (!message || message.type === 'ready') return;
+    if (message.type === 'token') {
+      if (accepted.current) return;
+      accepted.current = true;
+      callbacks.current.onToken(message.token);
+      return;
+    }
+    accepted.current = false;
+    setLoadError(true);
+    callbacks.current.onError();
   }
-  return <View style={{ gap: 6 }}><Text style={[ui.muted, { fontSize: 12 }]}>Security check</Text><WebView source={{ html }} originWhitelist={['about:blank', 'https://challenges.cloudflare.com/*']} javaScriptEnabled domStorageEnabled setSupportMultipleWindows={false} onMessage={handleMessage} onError={onError} onShouldStartLoadWithRequest={request => {
-    try { const url = new URL(request.url); return url.protocol === 'about:' || (url.protocol === 'https:' && url.hostname === 'challenges.cloudflare.com'); }
-    catch { return false; }
-  }} style={{ height: 72, backgroundColor: colors.card }} /></View>;
+
+  const retryView = <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={[ui.muted, { fontSize: 12 }]}>The security check could not load. Check your connection and try again.</Text><Button title="Retry security check" secondary onPress={retry} /></View>;
+  return <View style={{ minHeight: 104, gap: 6 }}>
+    <Text style={[ui.muted, { fontSize: 12 }]}>Security check</Text>
+    {loadError || !pageUrl ? (loadError ? retryView : <ActivityIndicator color={colors.green} />) : <WebView
+      source={{ uri: pageUrl }}
+      originWhitelist={[new URL(pageUrl).origin + '/*', 'https://challenges.cloudflare.com/*', 'about:blank', 'about:srcdoc']}
+      javaScriptEnabled
+      domStorageEnabled
+      setSupportMultipleWindows={false}
+      javaScriptCanOpenWindowsAutomatically={false}
+      onMessage={handleMessage}
+      onError={() => { setLoadError(true); callbacks.current.onError(); }}
+      onHttpError={() => { setLoadError(true); callbacks.current.onError(); }}
+      onShouldStartLoadWithRequest={request => isAllowedCaptchaNavigation(request.url, pageUrl)}
+      style={{ height: 92, backgroundColor: colors.card }}
+    />}
+  </View>;
 }

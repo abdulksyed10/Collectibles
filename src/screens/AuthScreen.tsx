@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { ArrowRight, Check, LockKeyhole, Layers3, Eye, EyeOff, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +23,8 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
   const captchaApplies = Boolean(captchaSiteKey) && mode !== 'verify';
   const cooldownSeconds = secondsUntil(cooldownUntil, now);
   const signInPaused = mode === 'signin' && cooldownSeconds > 0;
+  const handleCaptchaToken = useCallback((token: string) => { setCaptchaToken(token); setError(''); }, []);
+  const handleCaptchaError = useCallback(() => setCaptchaToken(null), []);
   useEffect(() => {
     if (!cooldownUntil || cooldownUntil <= Date.now()) return;
     const interval = setInterval(() => setNow(Date.now()), 1_000);
@@ -80,7 +82,7 @@ export function AuthScreen({ onDemo, onExplore }: { onDemo: () => void; onExplor
       {mode === 'signin' || mode === 'signup' ? <View><Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'signup' ? '8+ characters, upper, lower, number' : 'Your password'} secureTextEntry={!visible} autoCapitalize="none" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} editable={!busy} onSubmitEditing={submit} style={{ paddingRight: 52 }} /><Pressable accessibilityRole="button" accessibilityLabel={visible ? 'Hide password' : 'Show password'} onPress={() => setVisible(!visible)} style={{ position: 'absolute', right: 14, bottom: 14 }}>{visible ? <EyeOff size={21} color={colors.muted} /> : <Eye size={21} color={colors.muted} />}</Pressable></View> : null}
       {mode === 'verify' ? <Field label="Recovery code" value={code} onChangeText={setCode} placeholder="Code from your email" keyboardType="number-pad" autoComplete="one-time-code" editable={!busy} /> : null}
       {mode === 'signin' ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => change('reset')} style={{ alignSelf: 'flex-end' }}><Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 13 }}>Forgot password?</Text></Pressable> : null}
-      {captchaApplies ? <CaptchaChallenge key={`${mode}-${captchaVersion}`} siteKey={captchaSiteKey} onToken={token => { setCaptchaToken(token); setError(''); }} onError={() => setCaptchaToken(null)} /> : null}
+      {captchaApplies ? <CaptchaChallenge key={`${mode}-${captchaVersion}`} siteKey={captchaSiteKey} onToken={handleCaptchaToken} onError={handleCaptchaError} /> : null}
       {signInPaused ? <Text accessibilityRole="alert" style={[ui.muted, { fontSize: 13 }]}>Wait {cooldownSeconds} seconds before trying again.</Text> : null}
       <ErrorMessage message={error} />{notice ? <Text accessibilityRole="alert" style={[ui.text, { color: colors.green, fontSize: 14 }]}>{notice}</Text> : null}
       <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery email' : 'Verify code'} onPress={submit} loading={busy} disabled={!serviceReady || signInPaused || (captchaApplies && !captchaToken)} icon={ArrowRight} />
