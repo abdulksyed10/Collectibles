@@ -23,4 +23,5 @@ test('the auth form requests a challenge only from a submitted action and resume
   assert.match(auth, /requestCaptcha\('resend'\)/);
   assert.match(auth, /submitRef\.current\?\.\(token\)/);
   assert.doesNotMatch(auth, /disabled=\{[^}]*captchaToken/);
+  assert.doesNotMatch(auth, /onPress=\{submit\}/);
 });
