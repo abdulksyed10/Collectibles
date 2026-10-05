@@ -1,7 +1,7 @@
 import { MediaError,URL_TTL_SECONDS,validateJpegBase64,type Action } from './validation.ts';
 export interface Session { query<T extends Record<string,unknown> = Record<string,unknown>>(sql:string,params?:unknown[]):Promise<T[]> }
 export interface Database extends Session { transaction<T>(run:(tx:Session)=>Promise<T>):Promise<T> }
-export interface ObjectStore { put(key:string,bytes:Uint8Array):Promise<void>; remove(keys:string[]):Promise<void>; sign(key:string):Promise<string> }
+export interface ObjectStore { put(key:string,bytes:Uint8Array):Promise<void>; remove(keys:string[]):Promise<void>; sign(key:string):Promise<string>; get?(key:string):Promise<Uint8Array> }
 type Inventory = {attempt_id:string;item_id:string;owner_id:string;full_key:string;thumb_key:string;deleted_at:string|null} & Record<string,unknown>;
 type Limits = {
   uploads_enabled:boolean; active_photos_per_owner:number; attempts_per_owner_hour:number;
@@ -71,6 +71,31 @@ async function reserveInventory(db:Database,owner:string,itemId:string,attemptId
 }
 
 export function createMediaService(db:Database,store:ObjectStore,deleteUser:(owner:string)=>Promise<void>) {
+  async function readReviewThumbnail(requester:string,itemId:string) {
+    const [admin] = await db.query<{is_admin:boolean}>('SELECT private.is_app_admin($1) AS is_admin', [requester]);
+    if (!admin?.is_admin) throw new MediaError(403,'admin_required','An administrator account is required.');
+    const [photo] = await db.query<{item_id:string;thumb_key:string}>(`
+      SELECT image.item_id, image.thumb_key
+      FROM public.item_images image
+      JOIN private.item_publication publication ON publication.item_id = image.item_id AND publication.owner_id = image.owner_id
+      JOIN public.items item ON item.id = image.item_id AND item.owner_id = image.owner_id
+      LEFT JOIN private.collection_publication collection_publication
+        ON collection_publication.collection_id = item.collection_id AND collection_publication.owner_id = item.owner_id
+      WHERE image.item_id = $1
+        AND (publication.status = 'review' OR collection_publication.status = 'review')
+      LIMIT 1
+    `, [itemId]);
+    if (!photo) throw new MediaError(404,'review_image_unavailable','Review image unavailable.');
+    if (!store.get) throw new MediaError(503,'storage_unavailable','Review images are temporarily unavailable.');
+    const bytes = await store.get(photo.thumb_key);
+    if (bytes.length > 200 * 1024 || bytes[0] !== 255 || bytes[1] !== 216 || bytes[bytes.length - 2] !== 255 || bytes[bytes.length - 1] !== 217) {
+      throw new MediaError(503,'storage_unavailable','Review images are temporarily unavailable.');
+    }
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 8192) binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+    return { itemId: photo.item_id, thumbnailDataUrl: `data:image/jpeg;base64,${btoa(binary)}` };
+  }
+
   async function upload(owner:string,action:Extract<Action,{action:'upload'}>) {
     // Consume a durable attempt before decoding. Invalid images cannot become a
     // free CPU-amplification path, and limits are shared by all function isolates.
@@ -168,6 +193,7 @@ export function createMediaService(db:Database,store:ObjectStore,deleteUser:(own
       const images=await Promise.all(photos.map(async photo=>({itemId:photo.item_id,url:await store.sign(photo.full_key),thumbnailUrl:await store.sign(photo.thumb_key),expiresAt})));
       return {images};
     });
+    if(action.action==='read-review-thumbnail')return readReviewThumbnail(owner,action.itemId);
     if(action.action==='delete-account') {
       await deleteAccount(owner);
       return {ok:true};
