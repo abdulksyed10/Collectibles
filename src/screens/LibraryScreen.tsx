@@ -1,6 +1,6 @@
 import { PolicyLinks } from '../components/PolicyLinks';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, RefreshControl, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LogOut, Package, Pencil, Plus, Search, Share2, Trash2, X } from 'lucide-react-native';
@@ -13,6 +13,7 @@ import { CollectionNavigator } from '../components/CollectionNavigator';
 import { shareCollectionLink } from '../lib/sharing';
 import { CategoryEditor, CollectionEditor, ConfirmDelete, ItemEditor } from './Editors';
 import { PublicCatalog } from './PublicCatalog';
+import { AdminReviewScreen } from './AdminReviewScreen';
 import { useTheme, type ThemePreference } from '../theme/theme';
 
 type Dialog =
@@ -26,6 +27,7 @@ type Dialog =
   | { type: 'settings' }
   | { type: 'blocked-publishers' }
   | { type: 'appearance' }
+  | { type: 'admin-review' }
   | { type: 'delete-account' }
   | null;
 
@@ -47,6 +49,14 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
   const [shareStatus, setShareStatus] = useState('');
   const [shareError, setShareError] = useState('');
   const [hasPublicEntries, setHasPublicEntries] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (onExitDemo) { setIsAdmin(false); return () => { active = false; }; }
+    void repository.getAdminContext().then(context => { if (active) setIsAdmin(context.isAdmin); }).catch(() => { if (active) setIsAdmin(false); });
+    return () => { active = false; };
+  }, [onExitDemo, repository]);
 
   useEffect(() => { const timeout = setTimeout(() => setQuery(search), 250); return () => clearTimeout(timeout); }, [search]);
   const library = useLibrary(categoryId, collectionId, query);
@@ -86,8 +96,8 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
   const itemCollection = (item: Item) => library.collections.find(value => value.id === item.collection_id);
   const publicationLabel = (item: Item) => {
     if (item.visibility === 'private') return 'Private';
-    if (item.publication?.status === 'approved') return 'Public';
-    if (item.publication?.status === 'rejected' || item.publication?.status === 'removed') return 'Not published';
+    if (item.publication?.status === 'published') return 'Public';
+    if (item.publication?.status === 'removed') return 'Not published';
     return 'Under review';
   };
   const emptyTitle = query ? 'No matching entries' : !library.collections.length ? 'No entries yet.' : 'No entries yet.';
@@ -106,7 +116,7 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
       {category && collectionForCategory ? <Pressable accessibilityRole="button" accessibilityLabel="Edit this category" onPress={() => setDialog({ type: 'category', category, collection: collectionForCategory })} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.line }}><Pencil size={18} color={colors.green} /></Pressable> : collection ? <Pressable accessibilityRole="button" accessibilityLabel="Edit this collection" onPress={() => setDialog({ type: 'collection', collection })} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.line }}><Pencil size={18} color={colors.green} /></Pressable> : null}
     </View>
     {collection?.description ? <Text style={[ui.muted, { maxWidth: 650 }]}>{collection.description}</Text> : null}
-    {collection ? <View style={{ gap: 8 }}><View style={[ui.row, { flexWrap: 'wrap' }]}>{onExitDemo ? null : <Button title="Share collection" icon={Share2} onPress={() => { void shareCollection(collection.id); }} loading={shareBusy} disabled={!hasPublicEntries} />}{onPreviewShared ? <Button title="Preview public view" secondary onPress={() => onPreviewShared(collection.id)} disabled={!hasPublicEntries} /> : null}</View>{!hasPublicEntries ? <Text style={[ui.muted, { fontSize: 12 }]}>Public entries appear here after review.</Text> : null}{shareStatus ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{shareStatus}</Text> : null}<ErrorMessage message={shareError} /></View> : null}
+    {collection ? <View style={{ gap: 8 }}><View style={[ui.row, { flexWrap: 'wrap' }]}>{onExitDemo ? null : <Button title="Share collection" icon={Share2} onPress={() => { void shareCollection(collection.id); }} loading={shareBusy} disabled={!hasPublicEntries} />}{onPreviewShared ? <Button title="Preview public view" secondary onPress={() => onPreviewShared(collection.id)} disabled={!hasPublicEntries} /> : null}</View>{!hasPublicEntries ? <Text style={[ui.muted, { fontSize: 12 }]}>Make an entry public to share this collection in Explore.</Text> : null}{shareStatus ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{shareStatus}</Text> : null}<ErrorMessage message={shareError} /></View> : null}
     <View style={[ui.row, { gap: 8 }]}><View style={[ui.row, { flex: 1, minWidth: 0, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingLeft: 14, minHeight: 48 }]}><Search size={18} color={colors.muted} /><TextInput accessibilityLabel="Search entries" placeholder="Search entries" placeholderTextColor="#8B968D" value={search} onChangeText={setSearch} style={{ flex: 1, minWidth: 0, fontFamily: fonts.body, fontSize: 14, color: colors.ink, paddingVertical: 12 }} />{search ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={16} color={colors.muted} /></Pressable> : null}</View><Button title="Add item" icon={Plus} onPress={openAddItem} /></View>
     {!wide ? <CollectionNavigator compact collections={library.collections} categories={library.categories} selectedCollectionId={collectionId} selectedCategoryId={categoryId} onSelectCollection={selectCollection} onSelectCategory={selectCategory} onAddCollection={() => setDialog({ type: 'collection' })} onAddCategory={openCategory} /> : null}
     <View style={[ui.row, { justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, paddingBottom: 10 }]}><Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink }}>{query ? 'Search results' : 'Entries'} <Text style={{ color: colors.muted, fontFamily: fonts.body }}>{library.loading ? '' : `(${library.total})`}</Text></Text></View>
@@ -129,10 +139,11 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
     {dialog?.type === 'delete-item' ? <ConfirmDelete kind="item" name={dialog.item.title} action={() => repository.deleteItem(dialog.item.id)} onClose={() => setDialog(null)} onDeleted={changed} /> : null}
     {dialog?.type === 'delete-collection' ? <ConfirmDelete kind="collection" name={dialog.collection.name} action={() => repository.deleteCollection(dialog.collection.id)} onClose={() => setDialog(null)} onDeleted={() => { selectCollection(undefined); changed(); }} /> : null}
     {dialog?.type === 'delete-category' ? <ConfirmDelete kind="category" name={dialog.category.name} action={() => repository.deleteCategory(dialog.category.id)} onClose={() => setDialog(null)} onDeleted={() => { selectCategory(collectionId ?? '', undefined); changed(); }} /> : null}
-    {dialog?.type === 'settings' ? <Sheet title="Account" onClose={() => setDialog(null)} busy={signingOut}><View><Text style={ui.label}>{onExitDemo ? 'Demo' : 'Signed in as'}</Text><Text style={ui.text}>{email}</Text></View>{onExitDemo ? <Text style={ui.muted}>Demo changes reset when you leave.</Text> : null}<Button title="Appearance" secondary onPress={() => setDialog({ type: 'appearance' })} disabled={signingOut} />{!onExitDemo ? <Button title="Blocked collectors" secondary onPress={() => setDialog({ type: 'blocked-publishers' })} disabled={signingOut} /> : null}<PolicyLinks /><ErrorMessage message={accountError} /><Button title={onExitDemo ? 'Exit demo' : 'Sign out'} secondary icon={LogOut} loading={signingOut} onPress={() => { void signOut(); }} />{!onExitDemo ? <Button title="Delete my account" secondary danger icon={Trash2} disabled={signingOut} onPress={() => setDialog({ type: 'delete-account' })} /> : null}</Sheet> : null}
+    {dialog?.type === 'settings' ? <Sheet title="Account" onClose={() => setDialog(null)} busy={signingOut}><View><Text style={ui.label}>{onExitDemo ? 'Demo' : 'Signed in as'}</Text><Text style={ui.text}>{email}</Text></View>{onExitDemo ? <Text style={ui.muted}>Demo changes reset when you leave.</Text> : null}<Button title="Appearance" secondary onPress={() => setDialog({ type: 'appearance' })} disabled={signingOut} />{isAdmin && !onExitDemo ? <Button title="Admin review" secondary onPress={() => setDialog({ type: 'admin-review' })} disabled={signingOut} /> : null}{!onExitDemo ? <Button title="Blocked collectors" secondary onPress={() => setDialog({ type: 'blocked-publishers' })} disabled={signingOut} /> : null}<PolicyLinks /><ErrorMessage message={accountError} /><Button title={onExitDemo ? 'Exit demo' : 'Sign out'} secondary icon={LogOut} loading={signingOut} onPress={() => { void signOut(); }} />{!onExitDemo ? <Button title="Delete my account" secondary danger icon={Trash2} disabled={signingOut} onPress={() => setDialog({ type: 'delete-account' })} /> : null}</Sheet> : null}
     {dialog?.type === 'blocked-publishers' ? <BlockedPublishers onClose={() => setDialog({ type: 'settings' })} /> : null}
     {dialog?.type === 'appearance' ? <AppearanceEditor onClose={() => setDialog({ type: 'settings' })} /> : null}
     {dialog?.type === 'delete-account' ? <ConfirmDelete kind="account" name="your account" action={() => repository.deleteAccount()} onClose={() => setDialog(null)} onDeleted={() => { setDialog({ type: 'settings' }); void signOut(); }} /> : null}
+    {dialog?.type === 'admin-review' ? <Modal visible animationType="slide" onRequestClose={() => setDialog({ type: 'settings' })}><AdminReviewScreen onClose={() => setDialog({ type: 'settings' })} /></Modal> : null}
   </SafeAreaView>;
 }
 

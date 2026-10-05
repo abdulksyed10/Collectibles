@@ -1,87 +1,42 @@
 # Collectibles
 
-Collectibles is a React Native + Expo app for recording personal collections. It runs on Android, iOS, and the web.
+Collectibles is a private-by-default catalog for the things people collect. It is built with Expo/React Native for web, Android, and iOS, Supabase for identity and data, and a private Cloudflare R2 bucket for images.
 
-Each account has collections such as Pins, Bottle caps, or Cards. A collection can contain optional categories, and each item can be private or submitted for public Explore independently of its collection or category.
+## Sharing and safety
 
-## Product behavior
+- Entries stay private until their owner makes each entry public.
+- Public entries appear in Explore immediately. Five reports from distinct signed-in members hide an entry or collection and send it to the protected admin review queue.
+- Guests can browse Explore and block a collector on their device; signing in is required to report.
+- Basic server-side profanity screening applies only to public titles, collection names, and category names. Private notes and private entries are not scanned.
 
-- New items are private by default. Notes and acquired dates always stay private.
-- An item can be submitted to Explore only after the owner accepts the public-sharing rules. Public submissions require review before they appear.
-- A later title, collection, or photo change sends a public item back for review.
-- Guest Explore works without an account. Signed-in viewers can report public entries or collections and block a collector from their own Explore view.
-- Images only: no videos are accepted. Photos remain in a private Cloudflare R2 bucket and are served through controlled endpoints.
-- Items can be added to an existing collection, a new collection/category created during upload, or a lazy General collection.
+See [Moderation](docs/MODERATION.md) for the review process and [Backend setup](docs/BACKEND.md) for deployment and service configuration.
 
-## Local development
+## Local setup
 
-Use Node 22.13.1 or newer.
-
-```sh
-npm ci
-npm run setup:hooks
-npm start
-```
-
-The demo works without any services. To run the connected app, copy `.env.example` to the ignored `.env.local` file and configure only client-safe values:
-
-```dotenv
-EXPO_PUBLIC_ENABLE_BACKEND=true
-EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-EXPO_PUBLIC_WEB_URL=https://YOUR_HOSTED_WEB_APP
-EXPO_PUBLIC_SUPPORT_EMAIL=support@YOUR_DOMAIN
-```
-
-Never add service-role keys, R2 credentials, database passwords, signing keys, or deployment tokens to an `EXPO_PUBLIC_*` variable or Git.
-
-## Public web pages
-
-The web app exposes these static routes once Vercel deploys the current build:
-
-- `/privacy`
-- `/terms`
-- `/community`
-- `/support`
-- `/delete-account`
+Copy `.env.example` to `.env.local` and `supabase/.env.example` to `supabase/.env.local`. Both local files are ignored by Git. Never add service-role, database, R2, or Turnstile secret values to `EXPO_PUBLIC_*` variables.
 
 `EXPO_PUBLIC_SUPPORT_EMAIL` must be set before sharing the support and deletion pages with beta users or store reviewers.
 
-## Services and database
-
-The app uses Supabase Auth/PostgreSQL plus private Cloudflare R2 media storage. R2 has previously been confirmed reachable through the deployed public-media endpoint; that does not replace ongoing ownership, deletion, and budget acceptance tests.
-
-Apply migrations forward only. Do not reset the hosted database. The public-safety migrations deliberately move existing public items to a review queue, so follow [the moderation runbook](docs/MODERATION.md) before applying them.
-
-- [Service setup](docs/CONNECT-SERVICES.md)
-- [Backend limits and media lifecycle](docs/BACKEND.md)
-- [OAuth setup](docs/OAUTH-SETUP.md)
-- [Release configuration](docs/RELEASE-CONFIGURATION.md)
-- [Operations runbook](docs/OPERATIONS.md)
-- [Device acceptance checklist](docs/DEVICE-ACCEPTANCE.md)
-- [Implementation and external setup status](docs/IMPLEMENTATION-PROGRESS.md)
-- [Store publishing runbook](docs/STORE-PUBLISHING.md)
-
-## Verification
-
-```sh
+```powershell
+npm ci
 npm run typecheck
 npm test
-npm run check:secrets -- --all
-npx expo install --check
-npm run build:web
+npm run web
 ```
 
-The backend tests execute migrations and policies in PGlite. They do not replace real Supabase/R2 tests or signed-device tests.
+## Deploying the backend
 
-## Store builds
+Apply migrations forward only. Do not reset the hosted database. Deploy the Edge Functions after applying the migrations, then grant the initial administrator through the ignored local environment:
 
-Before the first signed build, choose an Android package name and iOS bundle identifier, configure the Expo project, configure production environment values in EAS, and set up the Apple and Google publisher accounts. The included icon, adaptive icon, splash artwork, automatic appearance, and native plugins are ready for build configuration; identifiers and credentials are intentionally absent.
+```powershell
+npx tsx supabase/scripts/grant-admin.ts abdulksyed10@gmail.com
+```
 
-```sh
-npx eas-cli build:configure
+Use [MODERATION.md](docs/MODERATION.md) for the exact release order and operational checks.
+
+## Native builds
+
+```powershell
 npx eas-cli build --platform android --profile preview
-npx eas-cli build --platform all --profile production
+npx eas-cli build --platform ios --profile preview
 ```
-
-See [release configuration](docs/RELEASE-CONFIGURATION.md) and [store publishing](docs/STORE-PUBLISHING.md) for the required dashboard and device-test sequence.

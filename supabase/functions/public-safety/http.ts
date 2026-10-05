@@ -13,7 +13,12 @@ export function validateReport(raw: unknown): Report {
     throw new MediaError(400,'invalid_report','Check the report and complete verification.');
   return b as Report;
 }
-export function createSafetyHandler(options:{origins:string[]; verify:(token:string)=>Promise<boolean>; submit:(report:Report)=>Promise<void>}) {
+/**
+ * Reporting moved to the authenticated `report_public_content` database RPC.
+ * Keep this legacy public endpoint deployed as a bounded, explicit rejection so
+ * an old client (or direct request) can never create an anonymous report.
+ */
+export function createSafetyHandler(options:{origins:string[]}) {
   return async (request:Request) => {
     const origin=request.headers.get('origin');
     const headers=new Headers({'content-type':'application/json','cache-control':'no-store','vary':'Origin','x-content-type-options':'nosniff'});
@@ -26,10 +31,8 @@ export function createSafetyHandler(options:{origins:string[]; verify:(token:str
       if(origin && !options.origins.includes(origin)) throw new MediaError(403,'origin_denied','Origin not allowed.');
       if(request.method==='OPTIONS') return new Response(null,{status:204,headers});
       if(request.method!=='POST') throw new MediaError(405,'method_not_allowed','Use POST.');
-      const report=validateReport(await readBoundedJson(request,8192));
-      if(!await options.verify(report.captchaToken)) throw new MediaError(400,'captcha_failed','Complete verification and try again.');
-      await options.submit(report);
-      return new Response(JSON.stringify({ok:true}),{headers});
+      await readBoundedJson(request,8192);
+      return new Response(JSON.stringify({error:'Sign in to report public content.'}),{headers,status:401});
     } catch(error) {
       const known=error instanceof MediaError;
       const limited=typeof error==='object' && error!==null && 'code' in error && error.code==='42901';

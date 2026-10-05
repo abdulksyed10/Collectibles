@@ -19,7 +19,7 @@ Run this on a real Android phone and a real iPhone from the exact EAS preview or
 ## Explore and public safety
 
 - Signed out: Browse Explore entries and collection topics, open an entry directly, use the collection button, and report/block content.
-- Signed in: Confirm a new public choice becomes pending, not visible. Approve it with operator tooling, then verify Explore/share visibility. Change title/photo/visibility and verify it returns to review or disappears.
+- Signed in: Confirm a new public choice appears in Explore. With five distinct test accounts, report an entry and verify it disappears from Explore/share visibility, then restore/remove it through the administrator queue. Change title/photo/visibility and verify public visibility remains correctly scoped.
 - Report content from a guest and signed-in account. Block/unblock a collector and confirm the Explore list refreshes without exposing identity details.
 
 ## Platform behavior

@@ -1,6 +1,6 @@
 import { requireClient } from '../lib/supabase';
 import { escapeSearch, validateCategory, validateCategorySettings, validateCollection, validateItem, validateItemSettings } from '../domain/validation';
-import type { BlockedPublisher, Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, PublicationStatus, PublicCollectionPage, PublicEntryPage, PublicReportReason, PublicTopicDetail, PublicTopicPage, SharedCollectionPage } from '../domain/models';
+import type { AdminReviewPage, BlockedPublisher, Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, PublicationStatus, PublicCollectionPage, PublicEntryPage, PublicReportReason, PublicTopicDetail, PublicTopicPage, SharedCollectionPage } from '../domain/models';
 import { todayLocalDate } from '../domain/dates';
 import { isCollectionId, validateSharedPage } from '../domain/sharing';
 import { guestBlocks, saveGuestBlocks, publicPreferencesChanged } from '../lib/publisherPreferences';
@@ -69,7 +69,7 @@ export const repository: CollectionRepository = {
       const publications = new Map(((publicationRows ?? []) as Array<{ itemId: string; status: string; message: string }>).map(row => [row.itemId, row]));
       for (const item of items) {
         const publication = publications.get(item.id);
-        if (publication && ['private', 'pending', 'approved', 'rejected', 'removed'].includes(publication.status)) item.publication = { status: publication.status as PublicationStatus, message: publication.message };
+        if (publication && ['private', 'published', 'review', 'removed'].includes(publication.status)) item.publication = { status: publication.status as PublicationStatus, message: publication.message };
       }
     }
     return { items, total: count ?? 0, hasMore: (page + 1) * PAGE_SIZE < (count ?? 0) };
@@ -119,10 +119,32 @@ export const repository: CollectionRepository = {
   async reportPublicContent(target) {
     if ((Boolean(target.itemId) === Boolean(target.collectionId)) || !target.reason) throw new Error('Choose the entry or collection to report.');
     const { data: session } = await requireClient().auth.getSession();
-    const response = session.session
-      ? await requireClient().rpc('report_public_content', { p_item_id: target.itemId ?? null, p_collection_id: target.collectionId ?? null, p_reason: target.reason, p_details: target.details?.trim() ?? '' })
-      : await requireClient().functions.invoke('public-safety', { body: { itemId: target.itemId, collectionId: target.collectionId, reason: target.reason, details: target.details?.trim() ?? '', captchaToken: target.captchaToken } });
-    if (response.error) throw new Error('Unable to send this report. Complete the verification or try again later. You can also contact support.');
+    if (!session.session) throw new Error('Sign in to report public content.');
+    const { error } = await requireClient().rpc('report_public_content', { p_item_id: target.itemId ?? null, p_collection_id: target.collectionId ?? null, p_reason: target.reason, p_details: target.details?.trim() ?? '' });
+    if (error) throw new Error(error.code === '42501' ? 'Sign in to report public content.' : 'Unable to send this report. Try again later.');
+  },
+  async getAdminContext() {
+    const { data, error } = await requireClient().rpc('get_admin_context');
+    if (error || !data || typeof (data as { isAdmin?: unknown }).isAdmin !== 'boolean') return { isAdmin: false };
+    return data as { isAdmin: boolean };
+  },
+  async listAdminReviewQueue(page) {
+    validateSharedPage(page);
+    const { data, error } = await requireClient().rpc('list_admin_review_queue', { p_page: page });
+    if (error || !data) throw new Error('Unable to load the review queue.');
+    return data as AdminReviewPage;
+  },
+  async resolveAdminReview(targetType, targetId, action) {
+    if (!isCollectionId(targetId)) throw new Error('Review target unavailable.');
+    const { data, error } = await requireClient().rpc('resolve_admin_review', { p_target_type: targetType, p_target_id: targetId, p_action: action });
+    if (error) throw new Error('Unable to update this review item.');
+    return Boolean(data);
+  },
+  async readReviewThumbnail(itemId) {
+    if (!isCollectionId(itemId)) throw new Error('Review image unavailable.');
+    const result = await media<{ itemId: string; thumbnailDataUrl: string }>({ action: 'read-review-thumbnail', itemId });
+    if (!result.itemId || !result.thumbnailDataUrl.startsWith('data:image/jpeg;base64,')) throw new Error('Review image unavailable.');
+    return result;
   },
   async blockPublicCollection(collectionId) {
     if (!isCollectionId(collectionId)) throw new Error('Collection unavailable.');

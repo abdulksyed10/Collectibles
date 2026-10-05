@@ -3,80 +3,91 @@ import { Text, View } from 'react-native';
 import { Button, colors, ui } from './ui';
 
 type TurnstileApi = {
-  render: (container: string, options: { sitekey: string; callback: (token: string) => void; 'error-callback': () => void; 'expired-callback': () => void }) => string;
+  render: (container: string, options: Record<string, unknown>) => string;
+  execute?: (widgetId: string) => void;
+  reset?: (widgetId: string) => void;
   remove?: (widgetId: string) => void;
 };
 
-declare global {
-  interface Window { turnstile?: TurnstileApi; }
-}
+declare global { interface Window { turnstile?: TurnstileApi; } }
 
 function validToken(token: unknown): token is string { return typeof token === 'string' && token.length >= 20 && token.length <= 4096; }
 
-export function CaptchaChallenge({ siteKey, onToken, onError }: { siteKey: string; onToken: (token: string) => void; onError: () => void }) {
+/** Renders an idle, interaction-only Turnstile widget. A parent must explicitly change executionId to run it. */
+export function CaptchaChallenge({ siteKey, executionId, resetId, onToken, onError }: { siteKey: string; executionId: number; resetId: number; onToken: (token: string) => void; onError: () => void }) {
   const id = useRef(`turnstile-${Math.random().toString(36).slice(2)}`).current;
   const callbacks = useRef({ onToken, onError });
+  const widget = useRef<string | undefined>(undefined);
+  const rendered = useRef(false);
+  const lastExecution = useRef(executionId);
+  const requestedExecution = useRef(executionId);
   const [attempt, setAttempt] = useState(0);
   const [loadError, setLoadError] = useState(false);
+  const [executing, setExecuting] = useState(false);
   const accepted = useRef(false);
   useEffect(() => { callbacks.current = { onToken, onError }; }, [onError, onToken]);
+
+  function executeRequested() {
+    if (requestedExecution.current === lastExecution.current || !widget.current || !window.turnstile?.execute) return;
+    lastExecution.current = requestedExecution.current;
+    accepted.current = false;
+    setExecuting(true);
+    try { window.turnstile.execute(widget.current); } catch { setExecuting(false); setLoadError(true); callbacks.current.onError(); }
+  }
+
   useEffect(() => {
     let active = true;
-    let widgetId: string | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let script: HTMLScriptElement | null = null;
-    let rendered = false;
-    const fail = () => {
-      if (!active) return;
-      if (widgetId) {
-        window.turnstile?.remove?.(widgetId);
-        widgetId = undefined;
-      }
-      setLoadError(true);
-      callbacks.current.onError();
-    };
-    const render = () => {
-      if (!active || rendered || !window.turnstile) return;
-      rendered = true;
+    const fail = () => { if (active) { setExecuting(false); setLoadError(true); callbacks.current.onError(); } };
+    const run = () => {
+      if (!active || rendered.current || !window.turnstile) return;
+      rendered.current = true;
       try {
-        widgetId = window.turnstile.render(`#${id}`, {
+        widget.current = window.turnstile.render(`#${id}`, {
           sitekey: siteKey,
-          callback: token => {
-            if (!active) return;
-            if (!validToken(token)) { fail(); return; }
-            if (accepted.current) return;
+          execution: 'execute',
+          appearance: 'interaction-only',
+          retry: 'never',
+          'refresh-expired': 'manual',
+          'refresh-timeout': 'manual',
+          callback: (token: string) => {
+            if (!active || !validToken(token) || accepted.current) { if (!validToken(token)) fail(); return; }
             accepted.current = true;
+            setExecuting(false);
             callbacks.current.onToken(token);
           },
           'error-callback': fail,
-          'expired-callback': () => { accepted.current = false; fail(); },
+          'expired-callback': fail,
+          'timeout-callback': fail,
         });
+        executeRequested();
         if (timeout) clearTimeout(timeout);
       } catch { fail(); }
     };
-    accepted.current = false;
-    setLoadError(false);
-    if (window.turnstile) render();
+    accepted.current = false; rendered.current = false; widget.current = undefined; setLoadError(false); setExecuting(false);
+    if (window.turnstile) run();
     else {
       script = document.getElementById('collectibles-turnstile') as HTMLScriptElement | null;
-      if (!script) {
-        script = document.createElement('script');
-        script.id = 'collectibles-turnstile';
-        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-        script.async = true;
-      }
-      script.addEventListener('load', render);
-      script.addEventListener('error', fail);
+      if (!script) { script = document.createElement('script'); script.id = 'collectibles-turnstile'; script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; script.async = true; }
+      script.addEventListener('load', run); script.addEventListener('error', fail);
       if (!script.parentNode) document.head.appendChild(script);
-      timeout = setTimeout(fail, 12_000);
+      timeout = setTimeout(fail, 12000);
     }
-    return () => {
-      active = false;
-      if (timeout) clearTimeout(timeout);
-      script?.removeEventListener('load', render);
-      script?.removeEventListener('error', fail);
-      if (widgetId) window.turnstile?.remove?.(widgetId);
-    };
+    return () => { active = false; if (timeout) clearTimeout(timeout); script?.removeEventListener('load', run); script?.removeEventListener('error', fail); if (widget.current) window.turnstile?.remove?.(widget.current); };
   }, [attempt, id, siteKey]);
-  return <View style={{ minHeight: 80, gap: 6 }}><Text style={[ui.muted, { fontSize: 12 }]}>Security check</Text>{loadError ? <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={[ui.muted, { fontSize: 12 }]}>The security check could not load. Try again.</Text><Button title="Retry security check" secondary onPress={() => setAttempt(value => value + 1)} /></View> : <View nativeID={id} style={{ minHeight: 65, alignItems: 'flex-start', justifyContent: 'center', backgroundColor: colors.card }} />}</View>;
+
+  useEffect(() => {
+    if (executionId === lastExecution.current) return;
+    requestedExecution.current = executionId;
+    executeRequested();
+  }, [executionId]);
+
+  useEffect(() => {
+    if (!widget.current || !window.turnstile?.reset) return;
+    accepted.current = false; setExecuting(false);
+    try { window.turnstile.reset(widget.current); } catch { /* The next explicit execution can still retry. */ }
+  }, [resetId]);
+
+  return <View style={{ minHeight: 44, gap: 6 }}><Text style={[ui.muted, { fontSize: 12 }]}>Security check</Text>{loadError ? <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={[ui.muted, { fontSize: 12 }]}>The security check could not load. Try again.</Text><Button title="Retry security check" secondary onPress={() => setAttempt(value => value + 1)} /></View> : <View nativeID={id} style={{ minHeight: executing ? 65 : 1, alignItems: 'flex-start', justifyContent: 'center', backgroundColor: colors.card }} />}</View>;
 }

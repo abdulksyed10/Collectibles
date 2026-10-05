@@ -33,7 +33,7 @@ async function fakeBackend(page: Page) {
     const request = route.request(); const url = new URL(request.url()); const resource = url.pathname.split('/').at(-1)!;
     if(resource==='get_policy_acceptance') { await route.fulfill({json:{requiredVersion:'2026-10-04',acceptedVersion:accepted?'2026-10-04':null}});return; }
     if(resource==='accept_public_rules') {accepted=true;await route.fulfill({json:null});return;}
-    if(resource==='list_owned_publications') {await route.fulfill({json:items.map(item=>({itemId:item.id,status:item.visibility==='private'?'private':'pending',message:''}))});return;}
+    if(resource==='list_owned_publications') {await route.fulfill({json:items.map(item=>({itemId:item.id,status:item.visibility==='private'?'private':'published',message:''}))});return;}
     if (resource === 'list_owned_collections') {
       const { p_search = '', p_visibility = null } = request.postDataJSON();
       const rows = collections.filter(collection => collection.name.toLowerCase().includes(p_search.toLowerCase())).map(collection => {

@@ -14,7 +14,7 @@ This runbook is for the person operating Collectibles. It is not a substitute fo
 
 ## Content and safety response
 
-- Public submissions stay pending until an operator approves them. The operator uses `supabase/scripts/review-public-content.ts` with a server-only database connection; do not expose the review RPC to a client.
+- Public entries appear in Explore immediately. Five reports from distinct signed-in accounts hide an entry or collection and place it in the database-authorized **Admin review** queue. Grant the initial role with `supabase/scripts/grant-admin.ts`; the client never receives an operator credential.
 - For an urgent report, first unpublish/remove the affected entry, preserve only the minimum report/audit information needed to act, and document the decision in the moderation reason.
 - Use the dashboard or restricted operator tooling to restrict repeat abuse. Do not try to identify or contact a reporter from the public app.
 - Guest blocks apply to that device and browser profile. Account blocks apply only to the signed-in account. Neither is a promise that a person cannot access a copied image outside the app.

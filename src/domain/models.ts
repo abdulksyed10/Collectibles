@@ -1,5 +1,5 @@
 export type ItemVisibility = 'private' | 'public';
-export type PublicationStatus = 'private' | 'pending' | 'approved' | 'rejected' | 'removed';
+export type PublicationStatus = 'private' | 'published' | 'review' | 'removed';
 
 export type Collection = {
   id: string;
@@ -89,6 +89,17 @@ export type PublicEntryPage = { entries: PublicEntryCard[]; total: number; hasMo
 export type PublicTopicDetail = { topic: { key: string; name: string }; entries: PublicEntryCard[]; total: number; hasMore: boolean };
 export type PublicReportReason = 'spam' | 'sexual' | 'violence' | 'hate' | 'harassment' | 'scam' | 'privacy' | 'other';
 export type BlockedPublisher = { publisherId: string; blockedAt: string };
+export type AdminReviewTarget = {
+  targetType: 'item' | 'collection';
+  targetId: string;
+  title: string;
+  collectionName: string;
+  ownerPublicId: string;
+  reportCount: number;
+  reasonSummary: Record<string, number>;
+  hiddenAt: string | null;
+};
+export type AdminReviewPage = { targets: AdminReviewTarget[]; total: number; hasMore: boolean };
 export interface CollectionRepository {
   listCategories(collectionId?: string): Promise<Category[]>;
   saveCategory(draft: CategoryDraft, id?: string): Promise<Category>;
@@ -103,7 +114,11 @@ export interface CollectionRepository {
   readPublicTopic(topicKey: string, page: number): Promise<PublicTopicDetail>;
   getPolicyAcceptance(): Promise<{requiredVersion: string; acceptedVersion: string | null}>;
   acceptPublicRules(): Promise<void>;
-  reportPublicContent(target: { itemId?: string; collectionId?: string; reason: PublicReportReason; details?: string; captchaToken?: string }): Promise<void>;
+  reportPublicContent(target: { itemId?: string; collectionId?: string; reason: PublicReportReason; details?: string }): Promise<void>;
+  getAdminContext(): Promise<{ isAdmin: boolean }>;
+  listAdminReviewQueue(page: number): Promise<AdminReviewPage>;
+  resolveAdminReview(targetType: 'item' | 'collection', targetId: string, action: 'restore' | 'remove'): Promise<boolean>;
+  readReviewThumbnail(itemId: string): Promise<{ itemId: string; thumbnailDataUrl: string }>;
   blockPublicCollection(collectionId: string): Promise<boolean>;
   listBlockedPublishers(): Promise<BlockedPublisher[]>;
   unblockPublicPublisher(publisherId: string): Promise<boolean>;

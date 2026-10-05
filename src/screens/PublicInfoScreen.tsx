@@ -39,7 +39,7 @@ export function PublicInfoScreen({ page, onBack }: { page: PublicInfoPage; onBac
     <Bullet>Collection names, categories, entry details, acquired dates, and photos that you add to provide the app.</Bullet>
     <Bullet>Basic service and security records such as upload counters, failed sign-in protection, reports, and account-deletion records.</Bullet>
     <Heading>When an entry is public</Heading>
-    <Paragraph>Only the entry title, collection name, and photo needed for Explore are shared after review. Notes, acquired dates, account email, storage keys, and private entries are not included. Public content can be viewed or copied by other people; removing it stops new access but cannot recall screenshots or files already saved.</Paragraph>
+    <Paragraph>Only the entry title, collection name, and photo needed for Explore are shared. Notes, acquired dates, account email, storage keys, and private entries are not included. Public content can be viewed or copied by other people; removing it stops new access but cannot recall screenshots or files already saved.</Paragraph>
     <Heading>Service providers and retention</Heading>
     <Paragraph>Collectibles uses Supabase for authentication and database services, Cloudflare R2 for private photo storage, Cloudflare Turnstile for abuse prevention, and Vercel for the hosted web app. These services process network and security information, including IP addresses. Google and Apple process sign-in information when their login option is enabled and used. Optional web traffic analytics exclude account details, entry identifiers and authentication links. Deleting an account removes its app data and photos through the deletion flow. Resolved reports are removed after 30 days, moderation audit records after 90 days, and short-term signup/report counters after two days. Open reports remain until resolved. Minimal photo deletion guards and lifetime storage counters remain to prevent late writes and limit abuse. Provider deletion failures are retried and retained until resolved. Service logs and backups follow each provider’s configured retention; a restored backup must have deletions reapplied before use.</Paragraph>
     <Heading>Your choices</Heading>
@@ -48,7 +48,7 @@ export function PublicInfoScreen({ page, onBack }: { page: PublicInfoPage; onBac
     <Paragraph>Use Collectibles to organize your own collection and to share entries you are allowed to share. You are responsible for the accuracy of your entries and for respecting other people’s rights.</Paragraph>
     <Heading>Public sharing</Heading>
     <Bullet>Public visibility applies to each entry, not an entire collection or category.</Bullet>
-    <Bullet>Public submissions may be reviewed, rejected, removed, or limited before or after they appear in Explore.</Bullet>
+    <Bullet>Public entries appear in Explore when shared. They may later be limited, removed, or reviewed after member reports.</Bullet>
     <Bullet>Do not upload unlawful, infringing, deceptive, private, or harmful content.</Bullet>
     <Heading>Account and service</Heading>
     <Paragraph>Keep your account credentials private. Do not attempt to bypass limits, scrape the service, interfere with its operation, or use it to harass others. We may suspend public publishing or restrict access when needed to protect people or the service.</Paragraph>

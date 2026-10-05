@@ -9,6 +9,6 @@
     "strict": true
   },
   "tasks": {
-    "check": "deno check index.ts ../public-media/index.ts ../public-safety/index.ts ../provider-grants/index.ts ../../scripts/cleanup-media.ts ../../scripts/review-public-content.ts ../../scripts/maintenance.ts"
+    "check": "deno check index.ts ../public-media/index.ts ../public-safety/index.ts ../provider-grants/index.ts ../../scripts/cleanup-media.ts ../../scripts/grant-admin.ts ../../scripts/maintenance.ts"
   }
 }

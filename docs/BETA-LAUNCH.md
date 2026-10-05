@@ -8,7 +8,7 @@ Readiness review: October 4, 2026. Target: a small invited group on Android phon
 - Private entry defaults, owner-only database policies, guest Explore, entry-first viewing, discovery topics for similarly named collections, and read-only share links. Shared responses omit owner details, notes, acquired dates, storage keys, private entries, and Explore categories. The hosted project currently runs the earlier collection-first migration set, so it needs those three migrations before these additions are live.
 - Supabase and both media functions are connected for the collection-first schema, and R2 stays private. The bridge and hierarchy migration completed on September 24; the existing project and bucket must not be reset.
 - Server-enforced photo count, upload attempts and byte reservations; app-wide emergency switches and public-photo read limits. In-app account deletion and a cleanup script exist.
-- Publication review, item-level public submission acceptance, report limits, publisher blocks, operator-only moderation records, and durable provider-aware deletion are implemented in migrations `202610040002` through `202610040006`. They are not live until deliberately applied. Applying them moves existing public entries into a pending review queue; follow [Moderation](MODERATION.md) and [Operations](OPERATIONS.md).
+- Immediate public sharing, five-member report review, publisher blocks, protected administrator records, and durable provider-aware deletion are implemented in migrations `202610040001` through `202610050001`. They are not live until deliberately applied. Follow [Moderation](MODERATION.md) and [Operations](OPERATIONS.md) for the forward-only rollout.
 - Public `/privacy`, `/terms`, `/community`, `/support`, and `/delete-account` web routes, plus owned app icon/splash artwork and automatic system appearance, are implemented. Configure `EXPO_PUBLIC_SUPPORT_EMAIL` before publishing those pages.
 - Automated SQL/privacy/quota tests and browser fixtures. Fixtures are not evidence of live email delivery, native installation or device permissions.
 
@@ -28,7 +28,7 @@ Acceptance: a new tester can confirm email, sign in, reset a password, upload a 
 
 Explore exposes user-generated photos. The source now includes a report/block/review workflow, but it remains a store blocker until the migration, human response process, support contact, and live acceptance tests are in place. Before distributing this experience through store review:
 
-- Apply the moderation/safety migrations, review every pending entry, and assign someone to check open reports and deletion requests daily. Test moderation removal against Explore, shared routes, and `public-media` on the live services.
+- Apply the moderation/safety migrations, grant the administrator, and assign someone to check the five-report review queue and deletion requests daily. Test moderation removal against Explore, shared routes, and `public-media` on the live services.
 - Set the real support email and publish the policy pages. Have legal/policy owner review them for the actual data retention and support process; complete store privacy/data-safety disclosures based on deployed SDKs and services.
 - Verify the existing in-app deletion flow and the external deletion-request route against real disposable data. Configure Apple authorization revocation before enabling native Apple sign-in for a public release.
 - Prepare phone/tablet screenshots, age/content rating, store description, reviewer access, and beta feedback instructions.
@@ -51,7 +51,7 @@ Run the same release candidate on a physical Android phone, iPhone, and tablet/i
 - Photo library with limited/denied access, camera grant/denial, cancellation, large/rotated/HEIC photos and thumbnail quality. Confirm image conversion and upload limits on device.
 - Keyboard covering fields, scrolling at small widths, safe areas, Android Back, native date picker, large text, screen-reader labels and touch targets.
 - Slow/offline connections, expired session/URLs, failed/retried uploads, quota errors and recovery without duplicate or lost items.
-- Two accounts: owner can edit; others can view only approved public entries. Entry public-to-private revocation and moderation removal must affect metadata and photos. A publisher block must hide that publisher from the signed-in viewer’s Explore and shared metadata. Verify mixed-visibility siblings and category deletion without item/photo loss.
+- Two accounts: owner can edit; others can view public entries immediately. Confirm five distinct signed-in reports hide an entry or collection from metadata and photos, then verify administrator restore/remove. A publisher block must hide that publisher from the signed-in viewer’s Explore and shared metadata. Verify mixed-visibility siblings and category deletion without item/photo loss.
 - Existing content survives app upgrades. No unexpected permissions, secret values or private photos appear in logs/crash reports.
 
 ## Information needed to proceed

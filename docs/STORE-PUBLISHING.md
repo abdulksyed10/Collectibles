@@ -246,7 +246,7 @@ In the app's App Store tab, create/select the version matching the release candi
 - Age-rating questionnaire and content rights for public UGC; report/moderation/blocking instructions and a functioning contact.
 - App Privacy disclosures for your own processing and SDK/service partners, linked identifiers/photos/content, purposes, optional analytics/diagnostics and retention. Privacy manifests in the binary and App Privacy labels are separate obligations. [Apple privacy details](https://developer.apple.com/app-store/app-privacy-details/).
 - Pricing/availability, countries, publisher/trader details and agreements required for your chosen markets. Do not select children's distribution categories unless the app meets their additional requirements.
-- App Review contact, dedicated test credentials and clear notes: guest Explore, collection/item creation, public approval behavior, report/block and Settings → account deletion. Ensure pending-review content and demo data do not prevent reviewers from testing the real flows.
+- App Review contact, dedicated test credentials and clear notes: guest Explore, collection/item creation, immediate public sharing, five-member report review, block, and Settings → account deletion. Ensure demo data does not prevent reviewers from testing the real flows.
 - Select the processed production build, answer encryption/export questions truthfully, and choose manual or automatic release after approval.
 
 Submit for App Review and respond to issues with evidence/fixes. Keep Supabase, R2, email and support URLs available throughout review. For manual release, use Release This Version only when you want it public. TestFlight approval and production approval are separate.

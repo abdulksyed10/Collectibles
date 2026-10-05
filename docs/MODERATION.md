@@ -1,46 +1,38 @@
-# Moderating public entries
+# Moderation and review
 
-The October 4 safety migrations are **not yet deployed**. They make existing public entries pending without changing IDs, ownership or R2 keys. Only an approved current revision appears in Explore, topic counts/covers, shared pages or the public photo proxy. Title, collection-name/membership and photo changes invalidate approval. Notes and acquired dates stay private.
+Public entries appear in Explore as soon as their owner makes them public. A basic server-side text check rejects prohibited terms in public item titles, collection names, and category names. It does not inspect images; members can report those through the app.
 
-## Deploy in order
+## Reports and automatic review
 
-1. Verify a recoverable database backup and the current migration list; never reset production.
-2. Assign a person to check submissions/reports and the support inbox while beta is open. Publisher contact: Abdul Syed, abdulksyed10@gmail.com.
-3. Explain the one-time review of existing public entries to testers. Apply the additive October 4 migrations **before** the dependent frontend, then deploy `media`, `public-media`, `public-safety`, and `provider-grants` (provider-grants can remain unconfigured while social login is disabled).
-4. Configure the new server secrets described in `.env.example` and `supabase/.env.example`, then deploy the frontend. Old clients may read/delete but cannot bypass new policy or publication gates.
-5. Inspect and approve existing public submissions. Verify with a second account and a signed-out browser, including direct image URLs.
+- Only authenticated members can report an entry or collection.
+- One account contributes at most one active report to a target in each review cycle. Changing the reason or submitting again does not increase the count.
+- The default threshold is **five distinct reporting accounts**. On the fifth report, the target leaves Explore and enters the review queue.
+- If the target is a collection, every public entry in that collection is hidden from Explore, collection pages, topic pages, and public media while it is in review.
+- Restoring a target resolves the reports that triggered that cycle. Five new distinct reports are needed to hide it again.
 
-## Operator commands
+The threshold is stored in `private.moderation_config`, so it can be raised later without changing the app. Use the SQL Editor only with a deliberate review of the current value:
 
-Run from the repository root with Deno 2.9.6. Keep credentials only in ignored `supabase/.env.local`. The database connection is privileged: run locally as the publisher, never inside the app or an untrusted CI branch.
-
-```sh
-deno run --config supabase/functions/media/deno.json --env-file=supabase/.env.local --allow-env --allow-net --allow-write=.tmp supabase/scripts/review-public-content.ts queue
+```sql
+update private.moderation_config
+set report_threshold = 10,
+    updated_at = now()
+where singleton = true;
 ```
 
-Replace `queue` at the end with:
+## Initial rollout
 
-| Command | Result |
-| --- | --- |
-| `view ITEM_UUID` | Creates ignored `.tmp/moderation-preview.html`, containing submitted title, collection name, full photo and thumbnail with five-minute links. Open locally. |
-| `approve ITEM_UUID REVISION "Approved"` | Approves the exact inspected revision. A concurrent edit causes a conflict: refresh and inspect again. |
-| `reject ITEM_UUID REVISION "Short reason for owner"` | Rejects publication and records a concise owner-visible reason. |
-| `remove ITEM_UUID REVISION "Short reason for owner"` | Removes previously approved content from all public surfaces. |
-| `reports` | Lists up to 50 open report targets/reasons. |
-| `report REPORT_NUMBER` | Opens details in ignored `.tmp/report-preview.txt`, without copying free text into normal logs. |
-| `resolve REPORT_NUMBER resolved "Operator note"` | Resolves the report after taking any necessary removal action. Use `dismissed` for a reviewed report requiring no action. |
-| `suspend PUBLIC_PUBLISHER_UUID` | Hides all entries from that publisher; private library and deletion remain available. |
+Apply migrations forward only; do not reset the hosted database. Apply the existing `202610040001` through `202610040006` migrations first, then `202610050001_report_threshold_review.sql`. Deploy the `media`, `public-media`, `public-safety`, and `provider-grants` functions from the same revision after the migration. `public-safety` deliberately rejects legacy anonymous reports; member reports use the database RPC.
 
-The review procedure locks the publication row and checks its revision. Do not approve by manually editing table columns. Review both image sizes, title and collection name against the Community rules. Never open executable downloads or share local previews/temporary image URLs. An operator can change a suspension using the private table in the SQL Editor after reviewing an appeal; there is no app-facing admin permission.
+After the migration and a successful deployment, grant the first administrator. This script reads ignored local server configuration and never prints keys or user IDs:
 
-## Reports, blocks and response process
+```powershell
+npx tsx supabase/scripts/grant-admin.ts abdulksyed10@gmail.com
+```
 
-Authenticated reports get their reporter identity from Supabase Auth. Guest reports require server-verified Turnstile. Both use bounded text, deduplication, transactional limits and the same acknowledgement for nonexistent/private targets. The endpoint does not trust submitted reporter IDs or forwarding headers.
+The account must already exist in Supabase Auth. Signing in with that account adds **Admin review** to the Account sheet. The database remains the authority: a client cannot gain access by changing its email or UI state.
 
-Limits: 5 reports/source/hour, 20/source/day, 200/app/day. Until a trusted ingress IP assertion is available, **all guests share one 5/hour and 20/day bucket**. This conservative beta choice may require genuine visitors to use support when the bucket is full. Do not replace it with arbitrary X-Forwarded-For.
+## Review procedure
 
-Account blocks apply across devices through filtered SQL projections. Guest blocks are stored on that device and sent as a bounded viewing preference; counts and covers are filtered too. A block does not make a public URL confidential.
+Open **Account → Admin review** while signed in as an administrator. The queue contains only report counts and reason totals, never reporter identities. For an item, the screen requests a bounded image thumbnail through the authenticated media function; it never exposes an R2 URL. Select **Restore** if it should return to Explore or **Remove** if it should remain unavailable. Check the support mailbox for appeals without revealing who reported the content.
 
-Check queue and support at least daily while beta is open. Prioritize exploitation, threats, privacy disclosures and scams; remove access while investigating. Resolve reports only after actioning the content. Reply to appeals through the monitored support process, without disclosing reporters. No guaranteed response time is advertised until the publisher can maintain it.
-
-Resolved reports: purge after 30 days. Moderation audit: 90 days. Open reports: retain until resolved. Maintenance removes expired counters; photo deletion guards/lifetime budgets remain. See OPERATIONS.md for scheduling and backup handling.
+Use the queue daily while beta is open. Review privacy complaints, threats, scams, and sexual content first. Basic text screening is a backstop, not a replacement for member reports and human review.
