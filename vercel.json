@@ -1,5 +1,45 @@
 {
   "rewrites": [
-    { "source": "/auth/callback", "destination": "/index.html" }
+    {
+      "source": "/auth/callback",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/community",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/support",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/index.html"
+    }
+  ],
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
   ]
 }

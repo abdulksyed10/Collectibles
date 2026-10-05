@@ -42,10 +42,10 @@ export function validateAction(value: unknown): Action {
   }
 }
 
-export async function readBoundedJson(request: Request): Promise<unknown> {
+export async function readBoundedJson(request: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') throw new MediaError(415,'invalid_content_type','Unsupported content type; use application/json.');
   const length = request.headers.get('content-length');
-  if (length !== null && (!/^\d+$/.test(length) || Number(length)>MAX_BODY_BYTES)) throw new MediaError(413,'body_too_large','Request body is too large.');
+  if (length !== null && (!/^\d+$/.test(length) || Number(length)>maxBytes)) throw new MediaError(413,'body_too_large','Request body is too large.');
   if (!request.body) throw new MediaError(400,'invalid_json','JSON body required.');
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -55,7 +55,7 @@ export async function readBoundedJson(request: Request): Promise<unknown> {
       const result = await reader.read();
       if (result.done) break;
       size += result.value.byteLength;
-      if (size>MAX_BODY_BYTES) {
+      if (size>maxBytes) {
         await reader.cancel();
         throw new MediaError(413,'body_too_large','Request body is too large.');
       }

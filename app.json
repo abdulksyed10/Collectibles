@@ -4,14 +4,24 @@
     "slug": "collectibles",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "collectibles",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F7F4EE"
+    },
     "ios": {
       "supportsTablet": true,
       "usesAppleSignIn": true
     },
     "android": {
-      "predictiveBackGestureEnabled": true
+      "predictiveBackGestureEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-foreground.png",
+        "backgroundColor": "#F7F4EE"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -32,7 +42,8 @@
       "expo-image",
       "@react-native-community/datetimepicker",
       "expo-web-browser",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-system-ui"
     ]
   }
 }

@@ -1,0 +1,44 @@
+name: Daily private-service maintenance
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: private-service-maintenance
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    if: vars.COLLECTIBLES_MAINTENANCE_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    environment: production-maintenance
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.6
+      - name: Sweep abandoned and deleted R2 objects
+        run: deno run --config supabase/functions/media/deno.json --allow-env --allow-net supabase/scripts/cleanup-media.ts
+        env:
+          MEDIA_DATABASE_URL: ${{ secrets.MEDIA_DATABASE_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      - name: Purge expired records and retry account deletion
+        run: deno run --config supabase/functions/media/deno.json --allow-env --allow-net supabase/scripts/maintenance.ts
+        env:
+          MEDIA_DATABASE_URL: ${{ secrets.MEDIA_DATABASE_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
+          APPLE_CLIENT_IDS: ${{ secrets.APPLE_CLIENT_IDS }}
+          PROVIDER_TOKEN_ENCRYPTION_KEY: ${{ secrets.PROVIDER_TOKEN_ENCRYPTION_KEY }}

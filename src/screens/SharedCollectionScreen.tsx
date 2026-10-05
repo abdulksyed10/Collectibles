@@ -1,3 +1,4 @@
+import { onPublicPreferencesChange } from '../lib/publisherPreferences';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, FlatList, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import { ArrowLeft, Package } from 'lucide-react-native';
 import type { CollectionRepository, SharedCollectionPage } from '../domain/models';
 import { publicPhotoUrl } from '../lib/sharing';
 import { Brand, Button, colors, ErrorMessage, fonts, messageOf, Sheet, ui } from '../components/ui';
+import { PublicSafetyControls } from '../components/PublicSafetyControls';
 
 type SharedItem = SharedCollectionPage['items'][number];
 type Photo = { full: string; thumb: string };
@@ -32,6 +34,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
   const readyRef = useRef(false);
   const pendingRecheckRef = useRef(false);
   const refresh = useCallback(() => setRevision(n => n + 1), []);
+  useEffect(() => onPublicPreferencesChange(refresh), [refresh]);
 
   const loadPage = useCallback(async (page: number) => {
     const result = await repository.readSharedCollection(collectionId, page);
@@ -149,6 +152,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
           <Text style={[ui.muted, { fontSize: 13 }]}>Shared collection</Text>
           <Text style={{ fontFamily: fonts.bold, fontSize: 26, color: colors.ink }}>{collection.name}</Text>
           <Text style={ui.muted}>{total} {total === 1 ? 'item' : 'items'}</Text>
+          <PublicSafetyControls repository={repository} collectionId={collectionId} itemLabel="this collection" demo={demo} onBlocked={onBack} />
         </> : null}
         <ErrorMessage message={error} />
         {error ? <Button title="Try again" secondary onPress={refresh} /> : null}
@@ -166,6 +170,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
     />
     {selected ? <Sheet title={selected.title} onClose={() => setSelected(null)}>
       {photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}
+      <PublicSafetyControls repository={repository} collectionId={collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); onBack(); }} />
     </Sheet> : null}
   </SafeAreaView>;
 }

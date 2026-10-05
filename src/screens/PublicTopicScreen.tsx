@@ -1,3 +1,4 @@
+import { onPublicPreferencesChange } from '../lib/publisherPreferences';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +8,7 @@ import type { CollectionRepository, ItemImage, PublicEntryCard } from '../domain
 import { publicPhotoUrl } from '../lib/sharing';
 import { Brand, Button, colors, ErrorMessage, fonts, messageOf, Sheet, ui } from '../components/ui';
 
+import { PublicSafetyControls } from '../components/PublicSafetyControls';
 type Photo = { full: string; thumb: string };
 
 export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollection, demo = false }: { topicKey: string; repository: CollectionRepository; onBack: () => void; onOpenCollection: (collectionId: string) => void; demo?: boolean }) {
@@ -39,6 +41,7 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
   }, [demo, repository, topicKey]);
 
   const refresh = useCallback(() => setRevision(value => value + 1), []);
+  useEffect(() => onPublicPreferencesChange(refresh), [refresh]);
   useEffect(() => {
     const request = ++requestRef.current;
     pageRef.current = 0; setLoading(true); setError(''); setEntries([]); setPhotos({}); setSelected(null); setFailedPhotos(new Set());
@@ -68,6 +71,6 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : null}
       ListFooterComponent={hasMore ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <Sheet title={selected.title} onClose={() => setSelected(null)}>{photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}<Text style={ui.muted}>{selected.collectionName}</Text><Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /></Sheet> : null}
+    {selected ? <Sheet title={selected.title} onClose={() => setSelected(null)}>{photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}<Text style={ui.muted}>{selected.collectionName}</Text><Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /><PublicSafetyControls repository={repository} collectionId={selected.collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); refresh(); }} /></Sheet> : null}
   </SafeAreaView>;
 }

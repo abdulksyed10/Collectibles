@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
-import { asOwner, createHierarchyFixture } from './hierarchy-fixture.ts';
+import { approvePendingPublications, asOwner, createHierarchyFixture } from './hierarchy-fixture.ts';
 
 const owner = '00000000-0000-4000-8000-000000000803';
 let db: PGlite;
@@ -10,11 +10,13 @@ before(async () => {
   db = await createHierarchyFixture();
   await db.query('INSERT INTO auth.users(id) VALUES ($1)', [owner]);
   await asOwner(db, owner, async () => {
+    await db.query("SELECT public.accept_public_rules('2026-10-04')");
     const pins = (await db.query<{ id: string }>("INSERT INTO collections(name,description) VALUES ('Pins','') RETURNING id")).rows[0]!.id;
     const myPins = (await db.query<{ id: string }>("INSERT INTO collections(name,description) VALUES ('My pins','') RETURNING id")).rows[0]!.id;
     const cards = (await db.query<{ id: string }>("INSERT INTO collections(name,description) VALUES ('Pokémon cards','') RETURNING id")).rows[0]!.id;
     await db.query("INSERT INTO items(collection_id,title,visibility) VALUES ($1,'Park pin','public'),($2,'Gift pin','public'),($2,'Private pin','private'),($3,'Rare card','public')", [pins, myPins, cards]);
   });
+  await approvePendingPublications(db);
 });
 after(async () => db?.close());
 

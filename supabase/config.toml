@@ -30,3 +30,13 @@ entrypoint = "./functions/media/index.ts"
 verify_jwt = false
 import_map = "./functions/media/deno.json"
 entrypoint = "./functions/public-media/index.ts"
+
+[functions.public-safety]
+verify_jwt = false
+import_map = "./functions/media/deno.json"
+entrypoint = "./functions/public-safety/index.ts"
+
+[functions.provider-grants]
+verify_jwt = false
+import_map = "./functions/media/deno.json"
+entrypoint = "./functions/provider-grants/index.ts"

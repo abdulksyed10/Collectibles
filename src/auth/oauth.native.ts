@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import { requireClient } from '../lib/supabase';
 import { beginOAuthFlow, handleAuthCallback } from './oauthFlow';
 import type { OAuthProvider } from './oauthCore';
+import { registerAppleGrant } from './providerGrant';
 
 WebBrowser.maybeCompleteAuthSession();
 export { handleAuthCallback };
@@ -23,7 +24,7 @@ async function signInWithNativeApple(): Promise<'completed' | 'cancelled'> {
   let credential: AppleAuthentication.AppleAuthenticationCredential;
   try {
     credential = await AppleAuthentication.signInAsync({
-      nonce,
+      nonce: await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, nonce),
       requestedScopes: [AppleAuthentication.AppleAuthenticationScope.FULL_NAME, AppleAuthentication.AppleAuthenticationScope.EMAIL],
     });
   } catch (error) {
@@ -31,8 +32,14 @@ async function signInWithNativeApple(): Promise<'completed' | 'cancelled'> {
     throw error;
   }
   if (!credential.identityToken) throw new Error('Apple did not return an identity token. Please try again.');
-  const { error } = await requireClient().auth.signInWithIdToken({ provider: 'apple', token: credential.identityToken, nonce, access_token: credential.authorizationCode ?? undefined });
+  const { error } = await requireClient().auth.signInWithIdToken({ provider: 'apple', token: credential.identityToken, nonce });
   if (error) throw error;
+  try {
+    if(!credential.authorizationCode) throw new Error('Apple authorization was incomplete. Please try again.');
+    const clientId = process.env.EXPO_PUBLIC_APPLE_NATIVE_CLIENT_ID?.trim();
+    if(!clientId) throw new Error('Apple sign-in is not available yet.');
+    await registerAppleGrant({code:credential.authorizationCode,clientId});
+  } catch(error) { await requireClient().auth.signOut({scope:'local'}); throw error; }
   const name = appleName(credential);
   if (name) await requireClient().auth.updateUser({ data: name });
   return 'completed';

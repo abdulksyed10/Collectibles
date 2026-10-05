@@ -10,6 +10,8 @@ import { confirmPhotoUpload, initialItemAcquiredOn, savedItemPlacement } from '.
 import { AcquiredDateField } from '../components/AcquiredDateField';
 import { Button, colors, ErrorMessage, Field, fonts, messageOf, Sheet, ui } from '../components/ui';
 
+import { useContributionPolicy } from '../components/ContributionPolicy';
+
 function Choices({ label, options, value, onChange, disabled }: { label: string; options: { id: string; name: string; subtitle?: string }[]; value: string; onChange: (id: string) => void; disabled?: boolean }) {
   return <View><Text style={ui.label}>{label}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{options.map(option => <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={`${label}: ${option.name}`} accessibilityState={{ selected: value === option.id }} {...(Platform.OS === 'web' ? { 'aria-pressed': value === option.id } : {})} onPress={() => onChange(option.id)} disabled={disabled} style={{ minHeight: 48, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 12, backgroundColor: value === option.id ? colors.green : colors.card, borderWidth: 1, borderColor: colors.line }}><Text style={{ fontFamily: fonts.medium, color: value === option.id ? '#FFF' : colors.ink }}>{option.name}</Text>{option.subtitle ? <Text style={{ color: value === option.id ? '#E8EFE8' : colors.muted, fontSize: 11 }}>{option.subtitle}</Text> : null}</Pressable>)}</ScrollView></View>;
 }
@@ -22,19 +24,20 @@ function mergeChoices<T extends { id: string }>(current: T[], incoming: T[]) {
 
 export function CategoryEditor({ category, collection, onClose, onSaved, onDelete }: { category?: Category; collection: Collection; onClose: () => void; onSaved: (value: Category) => void; onDelete: () => void }) {
   const repository = useRepository();
+  const policy = useContributionPolicy(repository);
   const [name, setName] = useState(category?.name ?? '');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   async function save() {
     setError('');
     if (!name.trim()) { setError('Enter a category name.'); return; }
     setBusy(true);
-    try { onSaved(await repository.saveCategory({ name: name.trim(), collectionId: collection.id }, category?.id)); }
+    try { await policy.ensure(); onSaved(await repository.saveCategory({ name: name.trim(), collectionId: collection.id }, category?.id)); }
     catch (reason) { setError(messageOf(reason)); }
     finally { setBusy(false); }
   }
   return <Sheet title={category ? 'Edit category' : 'New category'} subtitle={`In ${collection.name}`} onClose={onClose} busy={busy}>
     <Field label="Category name" placeholder="e.g. Local breweries" value={name} onChangeText={setName} maxLength={80} autoFocus editable={!busy} />
-    <ErrorMessage message={error} />
+    {policy.element}<ErrorMessage message={error} />
     <Button title={category ? 'Save category' : 'Create category'} icon={category ? Check : Plus} onPress={() => { void save(); }} loading={busy} />
     {category ? <Button title="Delete category" icon={Trash2} secondary danger onPress={onDelete} disabled={busy} /> : null}
     {category ? <Text style={[ui.muted, { fontSize: 12 }]}>Entries in this category stay in {collection.name} if you delete it.</Text> : null}
@@ -43,6 +46,7 @@ export function CategoryEditor({ category, collection, onClose, onSaved, onDelet
 
 export function CollectionEditor({ collection, onClose, onSaved, onDelete }: { collection?: Collection; onClose: () => void; onSaved: (value: Collection) => void; onDelete: () => void }) {
   const repository = useRepository();
+  const policy = useContributionPolicy(repository);
   const [name, setName] = useState(collection?.name ?? '');
   const [description, setDescription] = useState(collection?.description ?? '');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
@@ -50,12 +54,13 @@ export function CollectionEditor({ collection, onClose, onSaved, onDelete }: { c
     setError('');
     if (!name.trim()) { setError('Enter a collection name.'); return; }
     setBusy(true);
-    try { onSaved(await repository.saveCollection({ name: name.trim(), description }, collection?.id)); }
+    try { await policy.ensure(); onSaved(await repository.saveCollection({ name: name.trim(), description }, collection?.id)); }
     catch (reason) { setError(messageOf(reason)); }
     finally { setBusy(false); }
   }
   return <Sheet title={collection ? 'Edit collection' : 'New collection'} onClose={onClose} busy={busy}>
     <Field label="Collection name" placeholder="e.g. Bottle caps" value={name} onChangeText={setName} maxLength={80} autoFocus editable={!busy} />
+    {policy.element}
     <Field label="Description (optional)" placeholder="A short note about this collection" value={description} onChangeText={setDescription} maxLength={500} multiline editable={!busy} />
     <ErrorMessage message={error} />
     <Button title={collection ? 'Save collection' : 'Create collection'} icon={collection ? Check : Plus} onPress={() => { void save(); }} loading={busy} />
@@ -65,6 +70,7 @@ export function CollectionEditor({ collection, onClose, onSaved, onDelete }: { c
 
 export function ItemEditor({ item, image, collections, categories, initialCollection, initialCategory, onClose, onSaved }: { item?: Item; image?: ItemImage; collections: Collection[]; categories: Category[]; initialCollection?: string; initialCategory?: string; onClose: () => void; onSaved: () => void }) {
   const repository = useRepository();
+  const policy = useContributionPolicy(repository);
   const [title, setTitle] = useState(item?.title ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [collectionId, setCollectionId] = useState(item?.collection_id ?? initialCollection ?? collections[0]?.id ?? '');
@@ -98,6 +104,7 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     try { validateAcquiredDate(acquiredOn); } catch (reason) { setError(messageOf(reason)); return; }
     setBusy(true); setError(''); let metadataSaved = false;
     try {
+      await policy.ensure();
       const saved = await repository.saveItem({
         title,
         notes,
@@ -142,10 +149,10 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     <Choices label="Category" options={categoryOptions} value={creatingCategory ? '__new_category__' : categoryId} onChange={chooseCategory} disabled={busy} />
     {creatingCategory ? <Field label="New category name" placeholder="e.g. National parks" value={newCategoryName} onChangeText={setNewCategoryName} maxLength={80} editable={!busy} /> : null}
     <AcquiredDateField value={acquiredOn} onChange={setAcquiredOn} disabled={busy} />
-    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, { id: 'public', name: 'Public' }]} value={visibility} onChange={value => setVisibility(value as 'private' | 'public')} disabled={busy} />
-    <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'This item can appear in the public view. Notes stay private.' : 'Only you can view this item.'}</Text>
+    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, { id: 'public', name: 'Public' }]} value={visibility} onChange={value => { setVisibility(value as 'private' | 'public'); }} disabled={busy} />
+    <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'This item will be reviewed before it appears in Explore. Notes stay private.' : 'Only you can view this item.'}</Text>
     <Field label="Notes (optional)" placeholder="Item notes" value={notes} onChangeText={setNotes} maxLength={2000} multiline editable={!busy} />
-    <ErrorMessage message={error} /><Button title={item || savedId ? 'Save item' : 'Add item'} icon={Check} onPress={() => { void save(); }} loading={busy} disabled={picking} />
+    {policy.element}<ErrorMessage message={error} /><Button title={item || savedId ? 'Save item' : 'Add item'} icon={Check} onPress={() => { void save(); }} loading={busy} disabled={picking} />
   </Sheet>;
 }
 

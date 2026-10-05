@@ -7,6 +7,8 @@ const user = { id: owner, aud: 'authenticated', role: 'authenticated', email: 'c
 const access = [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from(JSON.stringify({ sub: owner, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url'), 'test-signature'].join('.');
 
 async function fakeBackend(page: Page) {
+  await page.addInitScript(() => { (window as any).turnstile={render:(_target:unknown,options:any)=>{queueMicrotask(()=>options.callback('fixture-captcha-token-that-is-long-enough'));return 'fixture';},remove:()=>{}}; });
+  let accepted=false;
   let collections: any[] = [];
   let categories: any[] = [];
   let items: any[] = [];
@@ -29,6 +31,9 @@ async function fakeBackend(page: Page) {
   });
   await page.route('**/rest/v1/**', async route => {
     const request = route.request(); const url = new URL(request.url()); const resource = url.pathname.split('/').at(-1)!;
+    if(resource==='get_policy_acceptance') { await route.fulfill({json:{requiredVersion:'2026-10-04',acceptedVersion:accepted?'2026-10-04':null}});return; }
+    if(resource==='accept_public_rules') {accepted=true;await route.fulfill({json:null});return;}
+    if(resource==='list_owned_publications') {await route.fulfill({json:items.map(item=>({itemId:item.id,status:item.visibility==='private'?'private':'pending',message:''}))});return;}
     if (resource === 'list_owned_collections') {
       const { p_search = '', p_visibility = null } = request.postDataJSON();
       const rows = collections.filter(collection => collection.name.toLowerCase().includes(p_search.toLowerCase())).map(collection => {
@@ -154,6 +159,7 @@ test('a fresh account can add an item with an inline collection and defaults ent
   await page.getByRole('button', { name: 'Collection: New collection', exact: true }).click();
   await page.getByLabel('New collection name').fill('Bottle Caps');
   await expect(page.getByRole('button', { name: 'Visibility: Private', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('checkbox',{name:'Agree to Terms and Community rules'}).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Add item', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open Blue cap', exact: true })).toBeVisible();
   expect(state.collections()).toHaveLength(1); expect(state.categories()).toHaveLength(0);
@@ -164,7 +170,7 @@ test('a fresh account can add an item with an inline collection and defaults ent
 test('categories are nested below their collection and sibling entries can have mixed visibility', async ({ page }) => {
   test.skip(process.env.PLAYWRIGHT_BACKEND_FIXTURE !== 'true', 'Requires fixture backend export.');
   const state = await fakeBackend(page); await page.goto('/'); await signIn(page);
-  await page.getByRole('button', { name: 'New collection', exact: true }).first().click(); await page.getByLabel('Collection name').fill('Pins'); await page.getByRole('button', { name: 'Create collection', exact: true }).click();
+  await page.getByRole('button', { name: 'New collection', exact: true }).first().click(); await page.getByLabel('Collection name').fill('Pins'); await page.getByRole('checkbox',{name:'Agree to Terms and Community rules'}).click(); await page.getByRole('button', { name: 'Create collection', exact: true }).click();
   await page.getByRole('button', { name: 'New category', exact: true }).click(); await page.getByLabel('Category name').fill('Local breweries'); await page.getByRole('button', { name: 'Create category', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Local breweries', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Add item', exact: true }).first().click(); await page.getByLabel('Item name').fill('Private pin'); await page.getByRole('dialog').getByRole('button', { name: 'Add item', exact: true }).click();

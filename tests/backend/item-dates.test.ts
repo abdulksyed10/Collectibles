@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import type { PGlite } from '@electric-sql/pglite';
-import { asOwner, createHierarchyFixture } from './hierarchy-fixture.ts';
+import { approvePendingPublications, asOwner, createHierarchyFixture } from './hierarchy-fixture.ts';
 
 const owner = '00000000-0000-4000-8000-000000000801';
 let db: PGlite;
@@ -10,7 +10,12 @@ let collectionId: string;
 before(async () => {
   db = await createHierarchyFixture();
   await db.query('INSERT INTO auth.users(id) VALUES ($1)', [owner]);
-  collectionId = await asOwner(db, owner, async () => (await db.query<{ id: string }>("INSERT INTO collections(name,description) VALUES ('Pins','') RETURNING id")).rows[0]!.id);
+  collectionId = await asOwner(db, owner, async () => {
+    await db.query("SELECT public.accept_public_rules('2026-10-04')");
+    const id = (await db.query<{ id: string }>("INSERT INTO collections(name,description) VALUES ('Pins','') RETURNING id")).rows[0]!.id;
+    await db.query("SELECT public.accept_public_rules('2026-10-04')");
+    return id;
+  });
 });
 after(async () => db?.close());
 
@@ -21,6 +26,7 @@ test('owners can set or clear an acquired date on an item without putting dates 
     await db.query('UPDATE items SET acquired_on=null WHERE id=$1', [itemId]);
     assert.deepEqual((await db.query<{ acquired_on: string | null }>('SELECT acquired_on::text FROM items WHERE id=$1', [itemId])).rows, [{ acquired_on: null }]);
   });
+  await approvePendingPublications(db, [itemId]);
   await db.exec('SET ROLE anon;');
   try {
     const result = await db.query<{ list_public_entries: { entries: Array<Record<string, unknown>> } }>('SELECT public.list_public_entries(0)');

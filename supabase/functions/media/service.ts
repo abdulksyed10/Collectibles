@@ -108,8 +108,8 @@ export function createMediaService(db:Database,store:ObjectStore,deleteUser:(own
     return {ok:true};
   }
 
-  async function retire(tx:Session,owner:string,itemIds:string[]) {
-    if(!itemIds.length)return;
+  async function markRetired(tx:Session,owner:string,itemIds:string[]):Promise<Inventory[]> {
+    if(!itemIds.length)return [];
     // Items with no attempt still need a tombstone so their IDs cannot be reused.
     // The original key layout is retained for these empty/legacy reservations.
     await tx.query(`INSERT INTO private.media_inventory(item_id,owner_id,full_key,thumb_key,deleted_at)
@@ -117,8 +117,46 @@ export function createMediaService(db:Database,store:ObjectStore,deleteUser:(own
       FROM public.items p WHERE p.owner_id=$1 AND p.id=ANY($2::uuid[])
         AND NOT EXISTS(SELECT 1 FROM private.media_inventory i WHERE i.item_id=p.id)`,[owner,itemIds]);
     await tx.query("UPDATE private.media_inventory SET deleted_at=coalesce(deleted_at,now()),budget_status='retired' WHERE owner_id=$1 AND item_id=ANY($2::uuid[])",[owner,itemIds]);
-    const inventory=await tx.query<Inventory>('SELECT * FROM private.media_inventory WHERE owner_id=$1 AND item_id=ANY($2::uuid[])',[owner,itemIds]);
-    await store.remove(inventory.flatMap(row=>[row.full_key,row.thumb_key]));
+    return await tx.query<Inventory>('SELECT * FROM private.media_inventory WHERE owner_id=$1 AND item_id=ANY($2::uuid[])',[owner,itemIds]);
+  }
+
+  async function retire(tx:Session,owner:string,itemIds:string[]) {
+    const inventory=await markRetired(tx,owner,itemIds);
+    await store.remove((inventory??[]).flatMap(row=>[row.full_key,row.thumb_key]));
+  }
+
+  type DeletionJob={status:string;failure_code:string|null};
+  async function stageAccountDeletion(owner:string) {
+    return db.transaction(async tx=>{
+      await lockOwner(tx,owner,true);
+      const [job]=await tx.query<DeletionJob>('SELECT status,failure_code FROM private.account_deletion_jobs WHERE owner_id=$1 FOR UPDATE',[owner]);
+      if(job?.status==='complete') return {ready:true, inventory:[] as Inventory[]};
+      // The durable freeze commits before any R2 request. A timeout can therefore
+      // only leave a retryable, hidden account rather than a writable account.
+      await tx.query('UPDATE private.owner_state SET deleting=true WHERE owner_id=$1',[owner]);
+      if(!job || job.status==='storage_pending' || (job.status==='needs_attention' && job.failure_code==='storage_delete_failed')) {
+        const items=await tx.query<{id:string}>('SELECT id FROM public.items WHERE owner_id=$1',[owner]);
+        const retired=await markRetired(tx,owner,items.map(item=>item.id));
+        const inventory=await tx.query<Inventory>('SELECT * FROM private.media_inventory WHERE owner_id=$1',[owner]);
+        await tx.query("INSERT INTO private.account_deletion_jobs(owner_id,status,attempts,failure_code,updated_at) VALUES($1,'storage_pending',1,null,now()) ON CONFLICT(owner_id) DO UPDATE SET status='storage_pending',attempts=private.account_deletion_jobs.attempts+1,failure_code=null,updated_at=now()",[owner]);
+        return {ready:false,inventory:[...retired,...inventory.filter(value=>!retired.some(next=>next.attempt_id===value.attempt_id))]};
+      }
+      return {ready:true,inventory:[] as Inventory[]};
+    });
+  }
+
+  async function deleteAccount(owner:string) {
+    const staged=await stageAccountDeletion(owner);
+    if(!staged.ready) {
+      try {
+        await store.remove(staged.inventory.flatMap(row=>[row.full_key,row.thumb_key]));
+        await db.query("UPDATE private.account_deletion_jobs SET status='provider_pending',failure_code=null,updated_at=now() WHERE owner_id=$1",[owner]);
+      } catch {
+        await db.query("UPDATE private.account_deletion_jobs SET status='needs_attention',failure_code='storage_delete_failed',updated_at=now() WHERE owner_id=$1",[owner]);
+        throw new MediaError(503,'storage_delete_failed','Account deletion is pending. Please retry later or contact support. Your account is unavailable for new uploads or public sharing.');
+      }
+    }
+    await deleteUser(owner);
   }
 
   return {async handle(owner:string,action:Action):Promise<unknown> {
@@ -130,8 +168,12 @@ export function createMediaService(db:Database,store:ObjectStore,deleteUser:(own
       const images=await Promise.all(photos.map(async photo=>({itemId:photo.item_id,url:await store.sign(photo.full_key),thumbnailUrl:await store.sign(photo.thumb_key),expiresAt})));
       return {images};
     });
+    if(action.action==='delete-account') {
+      await deleteAccount(owner);
+      return {ok:true};
+    }
     await db.transaction(async tx=>{
-      await lockOwner(tx,owner,action.action==='delete-account');
+      await lockOwner(tx,owner);
       if(action.action==='delete-item') {
         const items=await tx.query<{id:string}>('SELECT id FROM public.items WHERE id=$1 AND owner_id=$2',[action.itemId,owner]);
         await retire(tx,owner,items.map(item=>item.id));
@@ -140,19 +182,8 @@ export function createMediaService(db:Database,store:ObjectStore,deleteUser:(own
         const items=await tx.query<{id:string}>('SELECT id FROM public.items WHERE collection_id=$1 AND owner_id=$2',[action.collectionId,owner]);
         await retire(tx,owner,items.map(item=>item.id));
         await tx.query('DELETE FROM public.collections WHERE id=$1 AND owner_id=$2',[action.collectionId,owner]);
-      } else {
-        const items=await tx.query<{id:string}>('SELECT id FROM public.items WHERE owner_id=$1',[owner]);
-        await retire(tx,owner,items.map(item=>item.id));
-        // Include old reservations/tombstones left by previous failed deletes.
-        const inventory=await tx.query<Inventory>('SELECT * FROM private.media_inventory WHERE owner_id=$1',[owner]);
-        await store.remove(inventory.flatMap(row=>[row.full_key,row.thumb_key]));
-        await tx.query("UPDATE private.media_inventory SET deleted_at=coalesce(deleted_at,now()),budget_status='retired' WHERE owner_id=$1",[owner]);
-        await tx.query('UPDATE private.owner_state SET deleting=true WHERE owner_id=$1',[owner]);
       }
     });
-    // Auth deletion cascades through metadata and needs the same DB locks. Call
-    // it after commit; the durable deleting flag prevents new writes meanwhile.
-    if(action.action==='delete-account')await deleteUser(owner);
     return {ok:true};
   }};
 }

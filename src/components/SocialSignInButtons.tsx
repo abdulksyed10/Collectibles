@@ -18,6 +18,6 @@ export function SocialSignInButtons({ disabled, onError }: { disabled?: boolean;
   return <View style={{ gap: 10 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><View style={{ flex: 1, height: 1, backgroundColor: '#D8DED4' }} /><Text style={[ui.muted, { fontSize: 12 }]}>or continue with</Text><View style={{ flex: 1, height: 1, backgroundColor: '#D8DED4' }} /></View>
     <Button title="Continue with Google" secondary onPress={() => { void start('google'); }} loading={busy} disabled={disabled || busy} />
-    <Button title="Continue with Apple" secondary onPress={() => { void start('apple'); }} loading={busy} disabled={disabled || busy} />
+    {process.env.EXPO_PUBLIC_ENABLE_APPLE_BROWSER_LOGIN==='true' ? <Button title="Continue with Apple" secondary onPress={() => { void start('apple'); }} loading={busy} disabled={disabled || busy} /> : null}
   </View>;
 }

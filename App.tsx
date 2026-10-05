@@ -1,3 +1,4 @@
+import { AppAnalytics } from './src/components/AppAnalytics';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Platform, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -19,8 +20,10 @@ import { sharedIdFromUrl } from './src/domain/sharing';
 import { SharedCollectionScreen } from './src/screens/SharedCollectionScreen';
 import { GuestExploreScreen } from './src/screens/GuestExploreScreen';
 import { PublicTopicScreen } from './src/screens/PublicTopicScreen';
+import { PublicInfoScreen, type PublicInfoPage } from './src/screens/PublicInfoScreen';
 import { ThemeProvider, useTheme } from './src/theme/theme';
 import { handleAuthCallback } from './src/auth/oauth';
+import { publicInfoPageFromUrl } from './src/lib/publicPages';
 export default function App() { return <ThemeProvider><CollectiblesApp /></ThemeProvider>; }
 function CollectiblesApp() {
   const { effectiveTheme } = useTheme();
@@ -28,6 +31,7 @@ function CollectiblesApp() {
   const { session, loading, recovery, finishRecovery } = useSession();
   const [demo, setDemo] = useState<CollectionRepository | null>(null);
   const [sharedId, setSharedId] = useState<string | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? sharedIdFromUrl(window.location.href) : null);
+  const [publicInfoPage, setPublicInfoPage] = useState<PublicInfoPage | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? publicInfoPageFromUrl(window.location.href) : null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [guestExplore, setGuestExplore] = useState(false);
   const [previewTopic, setPreviewTopic] = useState<string | null>(null);
@@ -58,7 +62,10 @@ function CollectiblesApp() {
         }
         return;
       }
-      if (active) setSharedId(sharedIdFromUrl(url));
+      if (active) {
+        setPublicInfoPage(publicInfoPageFromUrl(url));
+        setSharedId(sharedIdFromUrl(url));
+      }
     };
     if (Platform.OS === 'web') {
       void processUrl(window.location.href);
@@ -77,8 +84,17 @@ function CollectiblesApp() {
       window.history.replaceState({}, '', url.toString());
     }
   }
+  function leavePublicInfoPage() {
+    setPublicInfoPage(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href); url.pathname = '/'; url.search = ''; url.hash = '';
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
   let content;
-  if ((!fontsLoaded && !fontError) || (loading && !sharedId)) {
+  if (publicInfoPage) {
+    content = <PublicInfoScreen page={publicInfoPage} onBack={leavePublicInfoPage} />;
+  } else if ((!fontsLoaded && !fontError) || (loading && !sharedId)) {
     content = <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.paper }}><ActivityIndicator color={colors.green} /><Text style={{ marginTop: 14, color: colors.ink }}>Opening your collection…</Text></View>;
   } else if (sharedId) {
     content = <SharedCollectionScreen collectionId={sharedId} repository={repository} onBack={leaveSharedView} />;
@@ -93,5 +109,5 @@ function CollectiblesApp() {
   } else {
     content = <AuthScreen onDemo={() => setDemo(createDemoRepository())} onExplore={() => setGuestExplore(true)} callbackError={callbackError} />;
   }
-  return <SafeAreaProvider><StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />{content}{previewId ? <Modal visible animationType="slide" onRequestClose={() => setPreviewId(null)}><SharedCollectionScreen collectionId={previewId} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewId(null)} /></Modal> : null}{previewTopic ? <Modal visible animationType="slide" onRequestClose={() => setPreviewTopic(null)}><PublicTopicScreen topicKey={previewTopic} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewTopic(null)} onOpenCollection={id => { setPreviewTopic(null); setPreviewId(id); }} /></Modal> : null}</SafeAreaProvider>;
+  return <SafeAreaProvider><AppAnalytics /><StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />{content}{previewId ? <Modal visible animationType="slide" onRequestClose={() => setPreviewId(null)}><SharedCollectionScreen collectionId={previewId} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewId(null)} /></Modal> : null}{previewTopic ? <Modal visible animationType="slide" onRequestClose={() => setPreviewTopic(null)}><PublicTopicScreen topicKey={previewTopic} repository={demo ?? repository} demo={Boolean(demo)} onBack={() => setPreviewTopic(null)} onOpenCollection={id => { setPreviewTopic(null); setPreviewId(id); }} /></Modal> : null}</SafeAreaProvider>;
 }

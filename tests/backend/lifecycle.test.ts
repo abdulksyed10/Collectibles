@@ -8,7 +8,7 @@ import { sweepMedia } from '../../supabase/functions/media/cleanup.ts';
 
 const a='10000000-0000-4000-8000-000000000001', b='10000000-0000-4000-8000-000000000002';
 const ca='10000000-0000-4000-8000-000000000011',cb='10000000-0000-4000-8000-000000000012';
-const item='10000000-0000-4000-8000-000000000021';
+const item='10000000-0000-4000-8000-000000000021', itemB='10000000-0000-4000-8000-000000000022';
 let pg:PGlite;
 let db:Database;
 const objects=new Map<string,Uint8Array>();
@@ -30,12 +30,14 @@ before(async()=>{
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT null::uuid $$;
     INSERT INTO auth.users VALUES ('${a}'),('${b}');`);
   await applyMigrations(pg, '', '202609240001_public_image_lookup_bridge.sql');
+  await pg.exec("CREATE TABLE private.account_deletion_jobs(owner_id uuid PRIMARY KEY,status text NOT NULL,attempts integer NOT NULL DEFAULT 0,updated_at timestamptz NOT NULL DEFAULT now(),failure_code text);");
   categoryA=(await pg.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1',[a])).rows[0].id;
   categoryB=(await pg.query<{id:string}>('SELECT id FROM categories WHERE owner_id=$1',[b])).rows[0].id;
   const session=(client:{query:Function}):Session=>({query:async<T extends Record<string,unknown>>(sql:string,params:unknown[]=[]) => (await client.query(sql,params)).rows as T[]});
   db={...session(pg),transaction:run=>pg.transaction(tx=>run(session(tx)))};
   await pg.query(`INSERT INTO collections(id,owner_id,category_id,name) VALUES ($1,$2,$3,'A'),($4,$5,$6,'B')`,[ca,a,categoryA,cb,b,categoryB]);
   await pg.query(`INSERT INTO items(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'A item')`,[item,a,ca]);
+  await pg.query(`INSERT INTO items(id,owner_id,collection_id,title) VALUES ($1,$2,$3,'B item')`,[itemB,b,cb]);
   media=createMediaService(db,store,async owner=>{if(failAuth)throw Error('auth unavailable'); await pg.query('DELETE FROM auth.users WHERE id=$1',[owner]);deletedUsers.push(owner);});
 });
 after(async()=>pg?.close());
@@ -44,7 +46,7 @@ test('foreign upload/read/delete cannot affect another owner and create no forei
   await assert.rejects(media.handle(b,upload),/not found/i);
   assert.deepEqual(await media.handle(b,{action:'read',itemIds:[item]}),{images:[]});
   assert.deepEqual(await media.handle(b,{action:'delete-item',itemId:item}),{ok:true});
-  assert.equal((await pg.query('SELECT * FROM items')).rows.length,1);
+  assert.equal((await pg.query('SELECT * FROM items WHERE owner_id=$1',[a])).rows.length,1);
   assert.equal(objects.size,0);
 });
 
@@ -68,17 +70,25 @@ test('partial upload keeps durable inventory, retry succeeds, and duplicate cann
 test('storage failure preserves deletable database metadata and retries retire both keys',async()=>{
   failRemove=true;
   await assert.rejects(media.handle(a,{action:'delete-collection',collectionId:ca}),/storage/);
-  assert.equal((await pg.query('SELECT * FROM item_images')).rows.length,1);
-  assert.equal((await pg.query('SELECT * FROM items')).rows.length,1);
+  assert.equal((await pg.query('SELECT * FROM item_images WHERE owner_id=$1',[a])).rows.length,1);
+  assert.equal((await pg.query('SELECT * FROM items WHERE owner_id=$1',[a])).rows.length,1);
   failRemove=false;
   assert.deepEqual(await media.handle(a,{action:'delete-collection',collectionId:ca}),{ok:true});
   assert.equal(objects.size,0);
-  assert.equal((await pg.query('SELECT * FROM items')).rows.length,0);
+  assert.equal((await pg.query('SELECT * FROM items WHERE owner_id=$1',[a])).rows.length,0);
   assert.ok((await pg.query('SELECT deleted_at FROM private.media_inventory')).rows[0].deleted_at);
   assert.deepEqual(await media.handle(a,{action:'delete-collection',collectionId:ca}),{ok:true});
 });
 
-test('account deletion freezes writes before Auth; Auth failure allows an authenticated retry',async()=>{
+test('account deletion freezes first and persists storage retry before attempting Auth deletion',async()=>{
+  await media.handle(b,{...upload,itemId:itemB});
+  failRemove=true;
+  await assert.rejects(media.handle(b,{action:'delete-account'}),/pending/);
+  assert.equal((await pg.query<{deleting:boolean}>('SELECT deleting FROM private.owner_state WHERE owner_id=$1',[b])).rows[0].deleting,true);
+  assert.equal((await pg.query<{status:string;failure_code:string}>('SELECT status,failure_code FROM private.account_deletion_jobs WHERE owner_id=$1',[b])).rows[0].status,'needs_attention');
+  assert.equal((await pg.query('SELECT * FROM item_images WHERE item_id=$1',[itemB])).rows.length,1);
+  await assert.rejects(media.handle(b,{action:'read',itemIds:[itemB]}),/deletion/);
+  failRemove=false;
   failAuth=true;
   await assert.rejects(media.handle(b,{action:'delete-account'}),/auth/);
   assert.equal((await pg.query('SELECT deleting FROM private.owner_state WHERE owner_id=$1',[b])).rows[0].deleting,true);
@@ -95,11 +105,11 @@ test('cleanup removes late orphan writes after settling, preserves active media 
   const [{full_key:retiredKey}]=await db.query<{full_key:string}>('SELECT full_key FROM private.media_inventory WHERE item_id=$1 LIMIT 1',[item]);
   objects.set(retiredKey,new Uint8Array([99]));
   assert.equal(await sweepMedia(db,store),0);
-  assert.equal(objects.size,1);
+  assert.ok([...objects.keys()].some(key=>key===retiredKey));
   await pg.query(`UPDATE private.media_inventory SET deleted_at=now()-interval '16 minutes' WHERE item_id=$1`,[item]);
   assert.equal(await sweepMedia(db,store),2);
-  assert.equal(objects.size,0);
-  assert.equal((await pg.query('SELECT * FROM private.media_inventory')).rows.length,2);
+  assert.equal([...objects.keys()].some(key=>key.includes(item)),false);
+  assert.equal((await pg.query('SELECT * FROM private.media_inventory WHERE owner_id=$1',[a])).rows.length,2);
 
   const active='10000000-0000-4000-8000-000000000031';
   await pg.query(`INSERT INTO collections(id,owner_id,category_id,name) VALUES ($1,$2,$3,'New')`,[ca,a,categoryA]);

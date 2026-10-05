@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform, useColorScheme } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as SystemUI from 'expo-system-ui';
 import { paletteForTheme, type Palette, type ThemePreference } from './palette';
 export { paletteForTheme, type Palette, type ThemePreference } from './palette';
 export const colors: Palette = { ...paletteForTheme('classic') };
@@ -30,6 +31,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const effectiveTheme = preference === 'system' ? (systemScheme === 'dark' ? 'dark' : 'classic') : preference;
   applyPalette(paletteForTheme(effectiveTheme));
   useEffect(() => { void readPreference().then(value => { if (validTheme(value)) setStoredPreference(value); }); }, []);
+  useEffect(() => { void SystemUI.setBackgroundColorAsync(paletteForTheme(effectiveTheme).paper).catch(() => { /* App surfaces still use the selected palette. */ }); }, [effectiveTheme]);
   const value = useMemo<ThemeContextValue>(() => ({ preference, effectiveTheme, setPreference: theme => { setStoredPreference(theme); void writePreference(theme); } }), [effectiveTheme, preference]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

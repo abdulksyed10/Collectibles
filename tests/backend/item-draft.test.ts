@@ -9,6 +9,7 @@ let db: PGlite;
 before(async () => {
   db = await createHierarchyFixture();
   await db.query('INSERT INTO auth.users(id) VALUES ($1)', [owner]);
+  await asOwner(db, owner, async () => { await db.query("SELECT public.accept_public_rules('2026-10-04')"); });
 });
 after(async () => db?.close());
 

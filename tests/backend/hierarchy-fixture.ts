@@ -27,3 +27,12 @@ export async function asOwner<T>(db: PGlite, ownerId: string, run: () => Promise
     await db.exec('RESET ROLE; RESET request.jwt.claim.sub;');
   }
 }
+
+/** Test-only operator action. Production approval is performed outside app roles. */
+export async function approvePendingPublications(db: PGlite, itemIds?: string[]) {
+  if (itemIds?.length) {
+    await db.query("UPDATE private.item_publication SET status='approved', approved_revision=revision, reviewed_at=now() WHERE status='pending' AND item_id=ANY($1::uuid[])", [itemIds]);
+    return;
+  }
+  await db.query("UPDATE private.item_publication SET status='approved', approved_revision=revision, reviewed_at=now() WHERE status='pending'");
+}

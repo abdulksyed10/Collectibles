@@ -51,6 +51,11 @@ before(async () => {
   await pg.query('INSERT INTO pin_images(pin_id,owner_id,full_key,thumb_key,bytes) VALUES ($1,$2,$3,$4,$5)', [legacy, owner, ...keys, blue.length * 2]);
   keys.forEach(key => objects.set(key, blue));
   await applyMigrations(pg, '202609150001_private_pins.sql', '202609240001_public_image_lookup_bridge.sql');
+  // This suite preserves the older collection shape to test its media-key
+  // upgrade, then adds the release deletion-job contract required by the
+  // current media service without applying the later hierarchy rewrite.
+  await pg.exec(await readFile('supabase/migrations/202610040005_provider_deletion.sql', 'utf8'));
+  await pg.exec(await readFile('supabase/migrations/202610040006_deletion_storage_stage.sql', 'utf8'));
   const session = (client: { query: Function }): Session => ({ query: async <T extends Record<string, unknown>>(sql: string, params: unknown[] = []) => (await client.query(sql, params)).rows as T[] });
   db = { ...session(pg), transaction: run => pg.transaction(tx => run(session(tx))) };
   media = createMediaService(db, store, async id => { await pg.query('DELETE FROM auth.users WHERE id=$1', [id]); });

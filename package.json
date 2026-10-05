@@ -12,10 +12,12 @@
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts tests/backend/*.test.ts",
     "check:secrets": "node scripts/check-secrets.mjs",
     "check:backend-config": "tsx scripts/check-backend-config.ts",
-    "build:web": "expo export --platform web --clear",
+    "check:release-config": "tsx scripts/check-release-config.ts",
+    "build:web": "node scripts/build-web.mjs",
     "test:e2e": "playwright test",
     "preview": "node scripts/serve-preview.mjs",
-    "setup:hooks": "git config core.hooksPath .githooks"
+    "setup:hooks": "git config core.hooksPath .githooks",
+    "eas-build-post-install": "tsx scripts/check-release-config.ts native"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -34,6 +36,7 @@
     "expo-linking": "~57.0.11",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
     "lucide-react-native": "^1.46.0",
     "react": "19.2.3",

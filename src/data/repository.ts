@@ -1,9 +1,14 @@
 import { requireClient } from '../lib/supabase';
 import { escapeSearch, validateCategory, validateCategorySettings, validateCollection, validateItem, validateItemSettings } from '../domain/validation';
-import type { Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, PublicCollectionPage, PublicEntryPage, PublicTopicDetail, PublicTopicPage, SharedCollectionPage } from '../domain/models';
+import type { BlockedPublisher, Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, PublicationStatus, PublicCollectionPage, PublicEntryPage, PublicReportReason, PublicTopicDetail, PublicTopicPage, SharedCollectionPage } from '../domain/models';
 import { todayLocalDate } from '../domain/dates';
 import { isCollectionId, validateSharedPage } from '../domain/sharing';
+import { guestBlocks, saveGuestBlocks, publicPreferencesChanged } from '../lib/publisherPreferences';
 const PAGE_SIZE = 24;
+async function publicBlocksHeader() {
+  const { data } = await requireClient().auth.getSession();
+  return data.session ? '' : (await guestBlocks()).map(row => row.publisherId).join(',');
+}
 async function media<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await requireClient().functions.invoke('media', { body });
   if (error) {
@@ -57,40 +62,101 @@ export const repository: CollectionRepository = {
     if (search.trim()) query = query.ilike('title', `%${escapeSearch(search.trim())}%`);
     const { data, count, error } = await query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (error) throw error;
-    return { items: data as Item[], total: count ?? 0, hasMore: (page + 1) * PAGE_SIZE < (count ?? 0) };
+    const items = data as Item[];
+    if (items.length) {
+      const { data: publicationRows, error: publicationError } = await requireClient().rpc('list_owned_publications', { p_item_ids: items.map(item => item.id) });
+      if (publicationError) throw publicationError;
+      const publications = new Map(((publicationRows ?? []) as Array<{ itemId: string; status: string; message: string }>).map(row => [row.itemId, row]));
+      for (const item of items) {
+        const publication = publications.get(item.id);
+        if (publication && ['private', 'pending', 'approved', 'rejected', 'removed'].includes(publication.status)) item.publication = { status: publication.status as PublicationStatus, message: publication.message };
+      }
+    }
+    return { items, total: count ?? 0, hasMore: (page + 1) * PAGE_SIZE < (count ?? 0) };
   },
   async readSharedCollection(collectionId, page) {
     if (!isCollectionId(collectionId)) throw new Error('Collection unavailable.');
     validateSharedPage(page);
-    const { data, error } = await requireClient().rpc('get_shared_collection', { p_collection_id: collectionId, p_page: page });
+    const { data, error } = await requireClient().rpc('get_shared_collection', { p_collection_id: collectionId, p_page: page }).setHeader('x-collectibles-blocks', await publicBlocksHeader());
     if (error) throw new Error('Unable to load this collection. Try again.');
     if (!data) throw new Error('Collection unavailable.');
     return data as SharedCollectionPage;
   },
   async listPublicEntries(page) {
     validateSharedPage(page);
-    const { data, error } = await requireClient().rpc('list_public_entries', { p_page: page });
+    const { data, error } = await requireClient().rpc('list_public_entries', { p_page: page }).setHeader('x-collectibles-blocks', await publicBlocksHeader());
     if (error || !data) throw new Error('Unable to load Explore. Try again.');
     return data as PublicEntryPage;
   },
   async listPublicCollections(page) {
     validateSharedPage(page);
-    const { data, error } = await requireClient().rpc('list_public_collections', { p_page: page });
+    const { data, error } = await requireClient().rpc('list_public_collections', { p_page: page }).setHeader('x-collectibles-blocks', await publicBlocksHeader());
     if (error || !data) throw new Error('Unable to load public collections. Try again.');
     return data as PublicCollectionPage;
   },
   async listPublicTopics(page) {
     validateSharedPage(page);
-    const { data, error } = await requireClient().rpc('list_public_topics', { p_page: page });
+    const { data, error } = await requireClient().rpc('list_public_topics', { p_page: page }).setHeader('x-collectibles-blocks', await publicBlocksHeader());
     if (error || !data) throw new Error('Unable to load public collections. Try again.');
     return data as PublicTopicPage;
   },
   async readPublicTopic(topicKey, page) {
     if (!topicKey || topicKey.length > 160) throw new Error('Collection unavailable.');
     validateSharedPage(page);
-    const { data, error } = await requireClient().rpc('get_public_topic', { p_topic_key: topicKey, p_page: page });
+    const { data, error } = await requireClient().rpc('get_public_topic', { p_topic_key: topicKey, p_page: page }).setHeader('x-collectibles-blocks', await publicBlocksHeader());
     if (error || !data) throw new Error('Collection unavailable.');
     return data as PublicTopicDetail;
+  },
+  async getPolicyAcceptance() {
+    const { data, error } = await requireClient().rpc('get_policy_acceptance');
+    if (error || !data) throw new Error('Unable to check Terms acceptance. Try again.');
+    return data;
+  },
+  async acceptPublicRules() {
+    const { error } = await requireClient().rpc('accept_public_rules', { p_version: '2026-10-04' });
+    if (error) throw new Error('Unable to record your public-sharing agreement. Try again.');
+  },
+  async reportPublicContent(target) {
+    if ((Boolean(target.itemId) === Boolean(target.collectionId)) || !target.reason) throw new Error('Choose the entry or collection to report.');
+    const { data: session } = await requireClient().auth.getSession();
+    const response = session.session
+      ? await requireClient().rpc('report_public_content', { p_item_id: target.itemId ?? null, p_collection_id: target.collectionId ?? null, p_reason: target.reason, p_details: target.details?.trim() ?? '' })
+      : await requireClient().functions.invoke('public-safety', { body: { itemId: target.itemId, collectionId: target.collectionId, reason: target.reason, details: target.details?.trim() ?? '', captchaToken: target.captchaToken } });
+    if (response.error) throw new Error('Unable to send this report. Complete the verification or try again later. You can also contact support.');
+  },
+  async blockPublicCollection(collectionId) {
+    if (!isCollectionId(collectionId)) throw new Error('Collection unavailable.');
+    const { data: session } = await requireClient().auth.getSession();
+    if (!session.session) {
+      const shared = await this.readSharedCollection(collectionId, 0);
+      if (!shared.collection.publisherId) throw new Error('Collector unavailable.');
+      const rows = await guestBlocks();
+      if (!rows.some(row => row.publisherId===shared.collection.publisherId)) await saveGuestBlocks([...rows, {publisherId: shared.collection.publisherId, blockedAt: new Date().toISOString()}]);
+      return true;
+    }
+    const { data, error } = await requireClient().rpc('block_public_collection', { p_collection_id: collectionId });
+    if (error) {
+      if (error.code === '42501') throw new Error('Sign in to block a collector.');
+      throw new Error('Unable to block this collector. Try again.');
+    }
+    publicPreferencesChanged();
+    return Boolean(data);
+  },
+  async listBlockedPublishers() {
+    const { data: session } = await requireClient().auth.getSession();
+    if (!session.session) return guestBlocks();
+    const { data, error } = await requireClient().rpc('list_blocked_publishers');
+    if (error) throw new Error('Unable to load blocked collectors. Try again.');
+    return (data ?? []) as BlockedPublisher[];
+  },
+  async unblockPublicPublisher(publisherId) {
+    const { data: session } = await requireClient().auth.getSession();
+    if (!session.session) { await saveGuestBlocks((await guestBlocks()).filter(row => row.publisherId!==publisherId)); return true; }
+    if (!isCollectionId(publisherId)) throw new Error('Collector unavailable.');
+    const { data, error } = await requireClient().rpc('unblock_public_publisher', { p_publisher_id: publisherId });
+    if (error) throw new Error('Unable to unblock this collector. Try again.');
+    publicPreferencesChanged();
+    return Boolean(data);
   },
   async saveItem(draft, id) {
     const value = { ...validateItem(draft), ...validateItemSettings(draft) };

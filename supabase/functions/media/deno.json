@@ -5,8 +5,10 @@
     "jpeg-js": "npm:jpeg-js@0.4.4",
     "aws4fetch": "npm:aws4fetch@1.0.20"
   },
-  "compilerOptions": { "strict": true },
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
-    "check": "deno check index.ts ../public-media/index.ts ../../scripts/cleanup-media.ts"
+    "check": "deno check index.ts ../public-media/index.ts ../public-safety/index.ts ../provider-grants/index.ts ../../scripts/cleanup-media.ts ../../scripts/review-public-content.ts ../../scripts/maintenance.ts"
   }
 }

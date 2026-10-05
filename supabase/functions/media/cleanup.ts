@@ -3,7 +3,8 @@ import type { Database,ObjectStore } from './service.ts';
 export async function sweepMedia(db:Database,store:ObjectStore,limit=100):Promise<number>{
   const candidates=await db.query<{attempt_id:string;owner_id:string}>(`
     SELECT i.attempt_id,i.owner_id FROM private.media_inventory i
-    WHERE NOT EXISTS(SELECT 1 FROM public.item_images p WHERE p.full_key=i.full_key OR p.thumb_key=i.thumb_key)
+    WHERE (NOT EXISTS(SELECT 1 FROM public.item_images p WHERE p.full_key=i.full_key OR p.thumb_key=i.thumb_key)
+      OR EXISTS(SELECT 1 FROM private.owner_state owner WHERE owner.owner_id=i.owner_id AND owner.deleting))
       AND (i.last_swept_at IS NULL OR i.last_swept_at < now()-interval '1 day')
       AND ((i.deleted_at < now()-interval '15 minutes') OR (i.deleted_at IS NULL AND i.created_at < now()-interval '1 day'))
     ORDER BY coalesce(i.last_swept_at,i.created_at),i.attempt_id LIMIT $1`,[Math.max(1,Math.min(limit,1000))]);
@@ -16,7 +17,8 @@ export async function sweepMedia(db:Database,store:ObjectStore,limit=100):Promis
       const [row]=await tx.query<{full_key:string;thumb_key:string;deleted_at:string|null}>(`
         SELECT i.full_key,i.thumb_key,i.deleted_at FROM private.media_inventory i
         WHERE i.attempt_id=$1
-          AND NOT EXISTS(SELECT 1 FROM public.item_images p WHERE p.full_key=i.full_key OR p.thumb_key=i.thumb_key)
+          AND (NOT EXISTS(SELECT 1 FROM public.item_images p WHERE p.full_key=i.full_key OR p.thumb_key=i.thumb_key)
+            OR EXISTS(SELECT 1 FROM private.owner_state owner WHERE owner.owner_id=i.owner_id AND owner.deleting))
           AND (i.last_swept_at IS NULL OR i.last_swept_at < now()-interval '1 day')
           AND ((i.deleted_at < now()-interval '15 minutes') OR (i.deleted_at IS NULL AND i.created_at < now()-interval '1 day'))`,[candidate.attempt_id]);
       if(!row)return false;

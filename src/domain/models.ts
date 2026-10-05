@@ -1,4 +1,5 @@
 export type ItemVisibility = 'private' | 'public';
+export type PublicationStatus = 'private' | 'pending' | 'approved' | 'rejected' | 'removed';
 
 export type Collection = {
   id: string;
@@ -32,6 +33,7 @@ export type Item = {
   acquired_on: string | null;
   created_at: string;
   updated_at: string;
+  publication?: { status: PublicationStatus; message: string };
 };
 export type ItemDraft = {
   title: string;
@@ -50,7 +52,7 @@ export type ItemImage = { itemId: string; url: string; thumbnailUrl: string; exp
 export type PreparedPhoto = { uri: string; imageBase64: string; thumbnailBase64: string };
 export type ItemPage = { items: Item[]; hasMore: boolean; total: number };
 export type SharedCollectionPage = {
-  collection: { id: string; name: string };
+  collection: { id: string; name: string; publisherId?: string };
   scope: { collectionId: string; categoryId: string | null };
   categories: { id: string; name: string }[];
   items: { id: string; title: string; hasPhoto: boolean; categoryId: string | null; categoryName: string | null }[];
@@ -63,6 +65,7 @@ export type PublicCollectionCard = {
   itemCount: number;
   coverItemId: string | null;
   isOwner: boolean;
+  publisherId?: string;
 };
 export type PublicCollectionPage = { collections: PublicCollectionCard[]; total: number; hasMore: boolean };
 export type PublicTopicCard = {
@@ -80,9 +83,12 @@ export type PublicEntryCard = {
   hasPhoto: boolean;
   collectionId: string;
   collectionName: string;
+  publisherId?: string;
 };
 export type PublicEntryPage = { entries: PublicEntryCard[]; total: number; hasMore: boolean };
 export type PublicTopicDetail = { topic: { key: string; name: string }; entries: PublicEntryCard[]; total: number; hasMore: boolean };
+export type PublicReportReason = 'spam' | 'sexual' | 'violence' | 'hate' | 'harassment' | 'scam' | 'privacy' | 'other';
+export type BlockedPublisher = { publisherId: string; blockedAt: string };
 export interface CollectionRepository {
   listCategories(collectionId?: string): Promise<Category[]>;
   saveCategory(draft: CategoryDraft, id?: string): Promise<Category>;
@@ -95,6 +101,12 @@ export interface CollectionRepository {
   listPublicCollections(page: number): Promise<PublicCollectionPage>;
   listPublicTopics(page: number): Promise<PublicTopicPage>;
   readPublicTopic(topicKey: string, page: number): Promise<PublicTopicDetail>;
+  getPolicyAcceptance(): Promise<{requiredVersion: string; acceptedVersion: string | null}>;
+  acceptPublicRules(): Promise<void>;
+  reportPublicContent(target: { itemId?: string; collectionId?: string; reason: PublicReportReason; details?: string; captchaToken?: string }): Promise<void>;
+  blockPublicCollection(collectionId: string): Promise<boolean>;
+  listBlockedPublishers(): Promise<BlockedPublisher[]>;
+  unblockPublicPublisher(publisherId: string): Promise<boolean>;
   saveItem(draft: ItemDraft, id?: string): Promise<Item>;
   readImages(itemIds: string[]): Promise<ItemImage[]>;
   uploadPhoto(itemId: string, photo: PreparedPhoto): Promise<void>;

@@ -44,6 +44,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
     collection_id: ['pins', 'pins', 'pins', 'cards', 'bottle-caps', 'bottle-caps'][index]!,
     category_id: ['parks', 'enamel', 'parks', 'first-editions', null, null][index]!,
     visibility: index === 0 || index === 3 ? 'public' : 'private',
+    publication: { status: index === 0 || index === 3 ? 'approved' : 'private', message: '' },
     acquired_on: index === 0 ? '2025-08-14' : null,
     created_at,
     updated_at: created_at,
@@ -200,6 +201,12 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
       const name = matches.map(collection => collection.name).sort((a, b) => a.length - b.length || a.localeCompare(b))[0]!;
       return { topic: { key, name }, entries: entries.slice(page * 24, (page + 1) * 24), total: entries.length, hasMore: (page + 1) * 24 < entries.length };
     },
+    async getPolicyAcceptance() { return {requiredVersion:'2026-10-04', acceptedVersion:'2026-10-04'}; },
+    async acceptPublicRules() { /* Demo has no public service. */ },
+    async reportPublicContent() { throw new Error('Reporting is unavailable in the demo.'); },
+    async blockPublicCollection() { throw new Error('Blocking is unavailable in the demo.'); },
+    async listBlockedPublishers() { return []; },
+    async unblockPublicPublisher() { return false; },
     async saveItem(draft, id) {
       if (draft.collectionId && draft.newCollectionName) throw new Error('Choose one collection option.');
       if (draft.categoryId && draft.newCategoryName) throw new Error('Choose one category option.');

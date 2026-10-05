@@ -11,6 +11,9 @@ jobs:
       EXPO_NO_DOTENV: '1'
       EXPO_PUBLIC_ENABLE_BACKEND: 'true'
       PLAYWRIGHT_BACKEND_FIXTURE: 'true'
+      COLLECTIBLES_BUILD_MODE: fixture
+      PLAYWRIGHT_CAPTCHA_FIXTURE: 'true'
+      EXPO_PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
       EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fixture_not_a_secret
     steps:
@@ -49,7 +52,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: v2.x
+          deno-version: v2.9.6
       - run: deno task --config supabase/functions/media/deno.json check

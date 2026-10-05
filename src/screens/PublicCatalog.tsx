@@ -1,3 +1,4 @@
+import { onPublicPreferencesChange } from '../lib/publisherPreferences';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
@@ -6,6 +7,7 @@ import type { ItemImage, PublicEntryCard, PublicTopicCard } from '../domain/mode
 import { useRepository } from '../data/RepositoryProvider';
 import { publicPhotoUrl } from '../lib/sharing';
 import { Button, colors, ErrorMessage, fonts, messageOf, Sheet, ui } from '../components/ui';
+import { PublicSafetyControls } from '../components/PublicSafetyControls';
 
 type ExploreView = 'entries' | 'collections';
 type ExploreCard = PublicEntryCard | PublicTopicCard;
@@ -35,6 +37,7 @@ export function PublicCatalog({ onLibrary, onOpenCollection, onOpenTopic, librar
   const requestRef = useRef(0);
   const loadingMoreRef = useRef(false);
   const refresh = useCallback(() => setRevision(value => value + 1), []);
+  useEffect(() => onPublicPreferencesChange(refresh), [refresh]);
 
   async function loadDemoPhotos(nextCards: ExploreCard[]) {
     if (!demo) return {};
@@ -138,6 +141,7 @@ export function PublicCatalog({ onLibrary, onOpenCollection, onOpenTopic, librar
       {selectedEntry.hasPhoto ? <Image source={{ uri: demo ? photos[selectedEntry.id]?.url : publicPhotoUrl(selectedEntry.collectionId, selectedEntry.id, 'full') }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selectedEntry.title} onError={() => setFailedPhotos(current => new Set(current).add(selectedEntry.id))} /> : <View style={{ minHeight: 220, alignItems: 'center', justifyContent: 'center', gap: 10 }}><Package size={44} color={colors.muted} /><Text style={ui.muted}>No photo</Text></View>}
       <Text style={ui.muted}>{selectedEntry.collectionName}</Text>
       <Button title="View full collection" secondary onPress={() => { const collectionId = selectedEntry.collectionId; setSelectedEntry(null); onOpenCollection(collectionId); }} />
+      <PublicSafetyControls repository={repository} collectionId={selectedEntry.collectionId} itemId={selectedEntry.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelectedEntry(null); refresh(); }} />
     </Sheet> : null}
   </View>;
 }

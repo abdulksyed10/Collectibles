@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import { authStorage, requireClient } from '../lib/supabase';
 import { parseOAuthCallback, type OAuthProvider } from './oauthCore';
+import { registerAppleGrant } from './providerGrant';
 
 const contextKey = 'collectibles.oauth.flow.v1';
 const maxFlowAgeMs = 15 * 60_000;
@@ -55,8 +56,15 @@ export async function handleAuthCallback(value: string): Promise<'handled' | 'ig
   if (!exchange) {
     exchange = (async () => {
       try {
-        const { error } = await requireClient().auth.exchangeCodeForSession(callback.code);
+        const { data, error } = await requireClient().auth.exchangeCodeForSession(callback.code);
         if (error) throw error;
+        if(context.provider==='apple') {
+          try {
+            const clientId=process.env.EXPO_PUBLIC_APPLE_SERVICE_ID?.trim();
+            if(!clientId || !data.session?.provider_refresh_token) throw new Error('Apple browser sign-in is not available yet. Use another sign-in option.');
+            await registerAppleGrant({clientId,refreshToken:data.session.provider_refresh_token});
+          } catch(error) { await requireClient().auth.signOut({scope:'local'}); throw error; }
+        }
       } finally {
         await authStorage.removeItem(contextKey);
       }

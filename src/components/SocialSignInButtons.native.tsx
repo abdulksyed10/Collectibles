@@ -29,6 +29,6 @@ export function SocialSignInButtons({ disabled, onError }: { disabled?: boolean;
       cornerRadius={12}
       style={{ width: '100%', height: 48, opacity: disabled || busy ? 0.55 : 1 }}
       onPress={() => { void start('apple'); }}
-    /> : null : <Button title="Continue with Apple" secondary onPress={() => { void start('apple'); }} loading={busy} disabled={disabled || busy} />}
+    /> : null : process.env.EXPO_PUBLIC_ENABLE_APPLE_BROWSER_LOGIN==='true' ? <Button title="Continue with Apple" secondary onPress={() => { void start('apple'); }} loading={busy} disabled={disabled || busy} /> : null}
   </View>;
 }

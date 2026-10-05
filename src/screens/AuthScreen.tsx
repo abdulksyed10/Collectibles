@@ -1,3 +1,4 @@
+import { PolicyLinks } from '../components/PolicyLinks';
 import React, { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { ArrowRight, Check, LockKeyhole, Layers3, Eye, EyeOff, ChevronLeft } from 'lucide-react-native';
@@ -121,7 +122,7 @@ export function AuthScreen({ onDemo, onExplore, callbackError }: { onDemo: () =>
       <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Collectibles?' : mode === 'signup' ? 'Already have an account?' : ''}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => change(mode === 'signin' ? 'signup' : 'signin')}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
       <View style={[ui.row, { justifyContent: 'center', paddingTop: 12 }]}><LockKeyhole size={13} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Entries stay private until you make them public.</Text></View>
     </View>
-  </View><Text style={[ui.muted, { fontSize: 11, textAlign: 'center', marginTop: 32 }]}>MADE FOR THE JOY OF COLLECTING</Text></View></ScrollView></KeyboardAvoidingView></SafeAreaView>;
+  </View><Text style={[ui.muted, { fontSize: 11, textAlign: 'center', marginTop: 32 }]}>MADE FOR THE JOY OF COLLECTING</Text></View><PolicyLinks /></ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }
 export function RecoveryScreen({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
