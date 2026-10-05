@@ -16,8 +16,9 @@ function styles() { return {
   card: { borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, padding: 22 },
 }; }
 export const ui = new Proxy({} as ReturnType<typeof styles>, { get: (_target, key: keyof ReturnType<typeof styles>) => styles()[key] });
-export function Brand({ small = false }: { small?: boolean }) {
-  return <View style={ui.row}><View style={{ backgroundColor: colors.green, width: small ? 34 : 42, height: small ? 34 : 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Layers3 size={small ? 19 : 23} color="#FFF" strokeWidth={1.7} /></View><Text style={{ fontFamily: fonts.bold, fontSize: small ? 18 : 22, color: colors.ink, letterSpacing: -0.6 }}>collectibles<Text style={{ color: colors.coral }}>.</Text></Text></View>;
+export function Brand({ small = false, onPress }: { small?: boolean; onPress?: () => void }) {
+  const content = <View style={ui.row}><View style={{ backgroundColor: colors.green, width: small ? 34 : 42, height: small ? 34 : 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><Layers3 size={small ? 19 : 23} color="#FFF" strokeWidth={1.7} /></View><Text style={{ fontFamily: fonts.bold, fontSize: small ? 18 : 22, color: colors.ink, letterSpacing: -0.6 }}>collectibles<Text style={{ color: colors.coral }}>.</Text></Text></View>;
+  return onPress ? <Pressable accessibilityRole="button" accessibilityLabel="Go to My collections" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>{content}</Pressable> : content;
 }
 export function Button({ title, onPress, icon: Icon, secondary, danger, loading, disabled, style }: { title: string; onPress: () => void; icon?: LucideIcon; secondary?: boolean; danger?: boolean; loading?: boolean; disabled?: boolean; style?: ViewStyle }) {
   const fg = secondary ? (danger ? colors.danger : colors.ink) : '#FFFFFF';
