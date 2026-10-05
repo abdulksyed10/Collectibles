@@ -297,6 +297,139 @@ $$;
 revoke all on function public.list_owned_publications(uuid[]) from public, anon, authenticated;
 grant execute on function public.list_owned_publications(uuid[]) to authenticated, service_role;
 
+-- Application administrators are a database role, not a client-side email
+-- comparison. Grants are made through the controlled operator script.
+create table private.app_admins (
+  owner_id uuid primary key references auth.users(id) on delete cascade,
+  granted_at timestamptz not null default now()
+);
+revoke all on private.app_admins from public, anon, authenticated;
+
+create or replace function private.is_app_admin(p_owner_id uuid)
+returns boolean
+language sql stable security definer set search_path = '' as $$
+  select p_owner_id is not null and exists (select 1 from private.app_admins where owner_id = p_owner_id);
+$$;
+revoke all on function private.is_app_admin(uuid) from public, anon, authenticated;
+
+create or replace function public.get_admin_context()
+returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object('isAdmin', private.is_app_admin(auth.uid()));
+$$;
+revoke all on function public.get_admin_context() from public, anon, authenticated;
+grant execute on function public.get_admin_context() to authenticated, service_role;
+
+create or replace function public.list_admin_review_queue(p_page integer default 0)
+returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare target_rows jsonb; target_total integer;
+begin
+  if not private.is_app_admin(auth.uid()) then raise exception 'admin access required' using errcode = '42501'; end if;
+  if p_page is null or p_page < 0 or p_page > 100 then return jsonb_build_object('targets', '[]'::jsonb, 'total', 0, 'hasMore', false); end if;
+  with targets as (
+    select 'item'::text as target_type, p.item_id as target_id, p.owner_id, p.review_cycle, p.reviewed_at as hidden_at,
+      i.title, c.name as collection_name
+    from private.item_publication p
+      join public.items i on i.id = p.item_id and i.owner_id = p.owner_id
+      join public.collections c on c.id = i.collection_id and c.owner_id = i.owner_id
+    where p.status = 'review'
+    union all
+    select 'collection'::text, p.collection_id, p.owner_id, p.review_cycle, p.reviewed_at,
+      c.name, c.name
+    from private.collection_publication p
+      join public.collections c on c.id = p.collection_id and c.owner_id = p.owner_id
+    where p.status = 'review'
+  ) select count(*) into target_total from targets;
+
+  with targets as (
+    select 'item'::text as target_type, p.item_id as target_id, p.owner_id, p.review_cycle, p.reviewed_at as hidden_at,
+      i.title, c.name as collection_name
+    from private.item_publication p
+      join public.items i on i.id = p.item_id and i.owner_id = p.owner_id
+      join public.collections c on c.id = i.collection_id and c.owner_id = i.owner_id
+    where p.status = 'review'
+    union all
+    select 'collection'::text, p.collection_id, p.owner_id, p.review_cycle, p.reviewed_at,
+      c.name, c.name
+    from private.collection_publication p
+      join public.collections c on c.id = p.collection_id and c.owner_id = p.owner_id
+    where p.status = 'review'
+  ) select coalesce(jsonb_agg(jsonb_build_object(
+      'targetType', page.target_type,
+      'targetId', page.target_id,
+      'title', page.title,
+      'collectionName', page.collection_name,
+      'ownerPublicId', private.public_publisher_id(page.owner_id),
+      'reportCount', page.report_count,
+      'reasonSummary', page.reason_summary,
+      'hiddenAt', page.hidden_at
+    ) order by page.hidden_at desc nulls last, page.target_type, page.target_id), '[]'::jsonb)
+    into target_rows
+    from (
+      select target.*, coalesce(reports.report_count, 0)::integer as report_count,
+        coalesce(reports.reason_summary, '{}'::jsonb) as reason_summary
+      from targets target
+      left join lateral (
+        select coalesce(sum(summary.count), 0)::integer as report_count, coalesce(jsonb_object_agg(summary.reason, summary.count), '{}'::jsonb) as reason_summary
+        from (
+          select reason, count(*)::integer as count
+          from private.public_content_reports report
+          where report.review_cycle = target.review_cycle and report.status = 'triggered'
+            and ((target.target_type = 'item' and report.item_id = target.target_id)
+              or (target.target_type = 'collection' and report.collection_id = target.target_id))
+          group by reason
+        ) summary
+      ) reports on true
+      order by target.hidden_at desc nulls last, target.target_type, target.target_id
+      offset p_page * 24 limit 24
+    ) page;
+  return jsonb_build_object('targets', target_rows, 'total', target_total, 'hasMore', target_total > (p_page + 1) * 24);
+end;
+$$;
+revoke all on function public.list_admin_review_queue(integer) from public, anon, authenticated;
+grant execute on function public.list_admin_review_queue(integer) to authenticated, service_role;
+
+create or replace function public.resolve_admin_review(p_target_type text, p_target_id uuid, p_action text)
+returns boolean
+language plpgsql security definer set search_path = '' as $$
+declare current_cycle integer; current_status text; resolved_status text;
+begin
+  if not private.is_app_admin(auth.uid()) then raise exception 'admin access required' using errcode = '42501'; end if;
+  if p_target_type not in ('item', 'collection') or p_target_id is null or p_action not in ('restore', 'remove') then
+    raise exception 'invalid review action' using errcode = '22023';
+  end if;
+  resolved_status := case when p_action = 'restore' then 'resolved' else 'dismissed' end;
+  if p_target_type = 'item' then
+    select review_cycle, status into current_cycle, current_status from private.item_publication where item_id = p_target_id for update;
+    if not found or current_status <> 'review' then return false; end if;
+    update private.item_publication set
+      status = case when p_action = 'restore' then 'published' else 'removed' end,
+      review_cycle = case when p_action = 'restore' then review_cycle + 1 else review_cycle end,
+      approved_revision = case when p_action = 'restore' then revision else null end,
+      reviewed_at = now(),
+      owner_message = case when p_action = 'restore' then '' else 'Removed from Explore after review.' end
+      where item_id = p_target_id;
+    update private.public_content_reports set status = resolved_status, reviewed_at = now(), reviewer_note = 'Administrator action applied.'
+      where item_id = p_target_id and review_cycle = current_cycle and status = 'triggered';
+  else
+    select review_cycle, status into current_cycle, current_status from private.collection_publication where collection_id = p_target_id for update;
+    if not found or current_status <> 'review' then return false; end if;
+    update private.collection_publication set
+      status = case when p_action = 'restore' then 'published' else 'removed' end,
+      review_cycle = case when p_action = 'restore' then review_cycle + 1 else review_cycle end,
+      reviewed_at = now(),
+      owner_message = case when p_action = 'restore' then '' else 'Removed from Explore after review.' end
+      where collection_id = p_target_id;
+    update private.public_content_reports set status = resolved_status, reviewed_at = now(), reviewer_note = 'Administrator action applied.'
+      where collection_id = p_target_id and review_cycle = current_cycle and status = 'triggered';
+  end if;
+  return true;
+end;
+$$;
+revoke all on function public.resolve_admin_review(text, uuid, text) from public, anon, authenticated;
+grant execute on function public.resolve_admin_review(text, uuid, text) to authenticated, service_role;
+
 drop index if exists private.item_publication_public_index;
 create index item_publication_public_index on private.item_publication(item_id, owner_id) where status = 'published';
 create index collection_publication_public_index on private.collection_publication(collection_id, owner_id) where status = 'published';
