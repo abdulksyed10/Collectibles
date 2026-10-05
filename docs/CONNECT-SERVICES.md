@@ -16,7 +16,7 @@ In `supabase/.env.local`, fill:
 
 The database URI is server-only. URL-encode special characters in its password; do not paste it into chat or shell command arguments. Native Android/iOS requests do not need a browser origin. The public mobile key cannot deploy migrations or replace database credentials.
 
-Run `npm run check:backend-config` to see which entries are present without displaying values. Both local files are ignored by Git. Hosted Supabase supplies the Auth admin credentials automatically; never put them or the R2 keys in the mobile environment.
+Run `npm run check:backend-config` to see which entries are present without displaying values. It includes `TURNSTILE_SECRET_KEY`, required for the anonymous public-reporting function. Both local files are ignored by Git. Hosted Supabase supplies the Auth admin credentials automatically; never put them or the R2 keys in the mobile environment.
 
 ## 2. Sign into the installed CLI
 

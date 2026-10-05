@@ -18,6 +18,10 @@ check('R2_ACCOUNT_ID', /^[a-f0-9]{32}$/i.test(server.R2_ACCOUNT_ID ?? ''));
 check('R2_BUCKET_NAME', /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(server.R2_BUCKET_NAME ?? ''));
 check('R2_ACCESS_KEY_ID', Boolean(server.R2_ACCESS_KEY_ID?.trim()));
 check('R2_SECRET_ACCESS_KEY', Boolean(server.R2_SECRET_ACCESS_KEY?.trim()));
+// Anonymous public reports are handled by a separate Edge Function. Its
+// Turnstile secret must remain server-only and is intentionally checked by
+// presence only.
+check('TURNSTILE_SECRET_KEY', Boolean(server.TURNSTILE_SECRET_KEY?.trim()));
 let databaseReady = false;
 try {
   const url = new URL(server.MEDIA_DATABASE_URL ?? '');
