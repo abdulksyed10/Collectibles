@@ -26,7 +26,16 @@ jobs:
       - run: node scripts/check-secrets.mjs --all
       - run: npm run typecheck
       - run: npm test
+      - name: Verify web release settings without a URL override
+        run: npm run check:release-config
+        env:
+          # Synthetic shape-valid values; this step never connects to services.
+          EXPO_PUBLIC_SUPABASE_URL: https://build-check.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_abcdefghijklmnopq
+          EXPO_PUBLIC_TURNSTILE_SITE_KEY: 0x4AAAAAabcdefghijkLMNo
+          EXPO_PUBLIC_WEB_URL: ''
       - run: npx expo install --check
+      - run: npx --no-install expo-doctor
       - name: Compile web, Android and iOS bundles
         run: npx expo export --platform all --clear --max-workers 2
       - run: npx playwright install --with-deps chromium

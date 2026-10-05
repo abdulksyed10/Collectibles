@@ -4,6 +4,20 @@ import { createHierarchyFixture } from './hierarchy-fixture.ts';
 import { createAccountDeletion } from '../../supabase/functions/provider-grants/deletion.ts';
 import { b64,sealToken } from '../../supabase/functions/provider-grants/crypto.ts';
 import type {Database,Session} from '../../supabase/functions/media/service.ts';
+import {applyMigrations} from './migrations.ts';
+
+test('deletion stage upgrade preserves pending jobs and gives new jobs a valid storage-first default',async()=>{
+  const pg=await createHierarchyFixture('202610040005_provider_deletion.sql');
+  const owner='00000000-0000-4000-8000-000000009903';
+  const nextOwner='00000000-0000-4000-8000-000000009904';
+  try {
+    await pg.query('INSERT INTO private.account_deletion_jobs(owner_id) VALUES($1)',[owner]);
+    await applyMigrations(pg,'202610040005_provider_deletion.sql');
+    await pg.query('INSERT INTO private.account_deletion_jobs(owner_id) VALUES($1)',[nextOwner]);
+    const result=await pg.query<{owner_id:string;status:string}>('SELECT owner_id,status FROM private.account_deletion_jobs ORDER BY owner_id');
+    assert.deepEqual(result.rows,[{owner_id:owner,status:'storage_pending'},{owner_id:nextOwner,status:'storage_pending'}]);
+  }finally{await pg.close();}
+});
 test('Apple provider outage preserves a retry; success purges grant before Auth deletion',async()=>{
   const pg=await createHierarchyFixture();const owner='00000000-0000-4000-8000-000000009901';
   const key=b64(crypto.getRandomValues(new Uint8Array(32)));

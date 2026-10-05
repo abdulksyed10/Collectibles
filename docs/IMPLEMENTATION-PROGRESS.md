@@ -17,3 +17,14 @@
 5. Complete store privacy, UGC, age-rating, support, account-deletion, and testing requirements in [STORE-PUBLISHING.md](STORE-PUBLISHING.md).
 
 Source validation can prove code and fixture behavior; it cannot prove a provider dashboard setting, a real payment account, a store policy decision, a physical device, or a live incident response.
+
+## Build repair verification — October 4
+
+- The exact `npm run build:web` release command succeeds with `EXPO_PUBLIC_WEB_URL` blank and other required client settings present. Synthetic values were used; no private server credentials entered the bundle.
+- TypeScript passes; 118 unit/database tests pass, including the web-origin fallback and deletion-stage upgrade regressions.
+- All 21 Expo Doctor checks and Expo's dependency compatibility check pass after repairing the splash plugin and dynamic config.
+- Web, Android and iOS exports succeed; Android/iOS include compiled Hermes bytecode. These are bundle exports, not signed native application builds.
+- All 13 Playwright browser tests pass with clean process exit, covering mobile collection flows, private defaults, CAPTCHA, public pages, reports/blocks and revocation refresh. These tests use mocked services.
+- Deno checks for the functions and operator scripts pass. The tracked-file secret scan passes; env files and database dumps are ignored.
+- npm audit still reports 25 affected dependency entries from three tooling advisories. See [DEPENDENCY-REVIEW.md](DEPENDENCY-REVIEW.md); no forced Expo/React Native downgrade was applied.
+- Live rollout remains pending, as recorded in [DEPLOYMENT-CHECKPOINT.md](DEPLOYMENT-CHECKPOINT.md). Native account configuration, signed builds and physical-device tests remain outstanding.

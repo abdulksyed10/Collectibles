@@ -16,3 +16,19 @@ test('native release additionally requires publisher-selected permanent identifi
   assert.deepEqual(validateReleaseConfig(native,true),[]);
   assert.ok(validateReleaseConfig({...native,APP_ANDROID_PACKAGE:'com.example.app'},true).length);
 });
+
+test('web builds allow the browser-origin fallback but still reject an explicit invalid web URL',()=>{
+  assert.deepEqual(validateReleaseConfig({...env,EXPO_PUBLIC_WEB_URL:undefined}),[]);
+  assert.deepEqual(validateReleaseConfig({...env,EXPO_PUBLIC_WEB_URL:''}),[]);
+  assert.deepEqual(validateReleaseConfig({...env,EXPO_PUBLIC_WEB_URL:'   '}),[]);
+  for(const url of ['https://YOUR_HOSTED_WEB_APP','http://localhost:8081','https://user:password@collectibles.test','https://collectibles.test/auth/callback','https://collectibles.test?secret=hidden']) {
+    assert.ok(validateReleaseConfig({...env,EXPO_PUBLIC_WEB_URL:url}).some(error=>error.includes('EXPO_PUBLIC_WEB_URL')));
+  }
+});
+
+test('native builds still require a hosted web origin for CAPTCHA and sharing',()=>{
+  const native={...env,APP_ANDROID_PACKAGE:'net.abdul.collectibles',APP_IOS_BUNDLE_IDENTIFIER:'net.abdul.collectibles',EXPO_OWNER:'abdul',EAS_PROJECT_ID:'00000000-0000-4000-8000-000000000111'};
+  for(const url of [undefined,'','   ']) {
+    assert.ok(validateReleaseConfig({...native,EXPO_PUBLIC_WEB_URL:url},true).some(error=>error.includes('EXPO_PUBLIC_WEB_URL')));
+  }
+});

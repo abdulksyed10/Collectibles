@@ -1,4 +1,17 @@
-# Deployment checkpoint — updated September 24, 2026
+# Deployment checkpoint — updated October 4, 2026
+
+## Current release repair and rollout boundary
+
+- The Vercel build at `f373734` failed because release validation required `EXPO_PUBLIC_WEB_URL` even though web authentication already supports the browser-origin fallback. The repair allows an omitted/blank web override and still requires a public HTTPS origin for native releases.
+- Native checks also found an obsolete splash configuration and dynamic-config inheritance issue. Both are repaired, with Expo Doctor added to CI. The undeployed account-deletion stage migration now converts existing pending jobs and sets a valid default before enforcing its new constraint.
+- Read-only hosted checks and `supabase migration list --linked` confirm migrations through `202609280003` are deployed. All six `202610040001`–`202610040006` migrations are pending. `get_policy_acceptance` and `list_owned_publications` return `PGRST202` on the live REST API. Do not publish the dependent frontend before its backend.
+- Schema and data dumps of `public`, `private`, and `auth` were saved successfully to ignored `.tmp/pre-release-20261004-{schema,data}.sql`. They contain private data, must stay local, and have not been restore-tested. Refresh them immediately before rollout if users have added data since this checkpoint.
+- No database migrations, Edge Functions or hosted environment values were changed during this repair. The production push is held pending service configuration. `TURNSTILE_SECRET_KEY` is absent from both the local server env and the hosted Edge Function secret inventory. The owner has been asked to add it to ignored `supabase/.env.local`; never paste it into chat or Git.
+- The connected Vercel account does not have access to the project's team. The fix does not require changing the Vercel web URL setting. EAS still needs its own explicit hosted web URL and publisher identifiers.
+
+Next: after the server secret is ready, refresh the backup, review the migration dry run, follow [MODERATION.md](MODERATION.md) to apply migrations and deploy the four functions, then push the frontend. Existing public entries move into the review queue; keep IDs, ownership and R2 objects intact. Verify live policy acceptance, private upload/read/delete, guest/account reports and public visibility with disposable accounts. Complete signed-device acceptance before store submission.
+
+The September records below are historical, not the current migration inventory.
 
 > **Current redesign status — September 24, 2026:** `202609240001_public_image_lookup_bridge.sql` and `202609240002_collection_first.sql` are applied to the linked Supabase project. The media function paused mutations during the upgrade; bridge-aware `public-media` was deployed before the final transaction, and mutations were restored afterward. The app now uses the collection-first schema.
 
@@ -73,7 +86,7 @@ The deployed defaults are 100 photos/account, 20 attempts/account/hour, 50 attem
 - The UI now has compact mobile controls, Private/Public owner tabs, a date picker, opt-in sharing and a read-only public route. R2 remains private by design; the new `public-media` source checks visibility before proxying bytes with no-store headers.
 - Function deployment is still Stage 2. No live accounts or shared test collections were created in this stage. See `COLLECTION-SHARING.md` for the contract and setup.
 
-## Current stopping point
+## September 24 stopping point (historical)
 
 All eight migrations, including `202609170005_public_catalog.sql`, `202609240001_public_image_lookup_bridge.sql`, and `202609240002_collection_first.sql`, and both media functions are deployed. Real user-created accounts/uploads exist; the earlier empty-project checks are historical. Explore now lists shared entries across accounts and can switch to collections. The legacy `collections.category_id` constraint that blocked top-level collection creation is no longer present. Do not reset the database or modify existing users for acceptance tests.
 

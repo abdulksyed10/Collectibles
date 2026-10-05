@@ -8,7 +8,7 @@ Reviewed: 2026-10-04
 
 ## npm audit result
 
-`npm audit --json` reports 24 transitive advisories: 17 high and 7 moderate, with no critical advisory. The affected paths are all within Expo/React Native tooling:
+`npm audit --json` reports 25 affected dependency entries: 17 high and 8 moderate, with no critical advisory. These entries trace to three underlying advisories (`braces`, `node-forge`, and `uuid`); npm also counts the packages that depend on them. Adding the SDK-compatible `expo-splash-screen` package adds one affected wrapper through `@expo/config-plugins`, without adding a new underlying advisory. The affected paths are all within Expo/React Native tooling:
 
 | Advisory chain | Where it runs | Current mitigation |
 | --- | --- | --- |
