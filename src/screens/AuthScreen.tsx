@@ -11,8 +11,10 @@ import { validatePassword } from '../domain/validation';
 import { CaptchaChallenge } from '../components/CaptchaChallenge';
 import { SocialSignInButtons } from '../components/SocialSignInButtons';
 import { authOperationForMode, mapAuthError, recordCredentialFailure, secondsUntil, type AuthOperation } from '../auth/security';
+import { authLandingVisuals } from '../theme/authLanding';
 export function AuthScreen({ onDemo, onExplore, callbackError }: { onDemo: () => void; onExplore: () => void; callbackError?: string }) {
   const wide = useWindowDimensions().width >= 860;
+  const landing = authLandingVisuals(colors);
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'verify'>('signin');
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [code, setCode] = useState('');
   const [visible, setVisible] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
@@ -111,10 +113,10 @@ export function AuthScreen({ onDemo, onExplore, callbackError }: { onDemo: () =>
   resendRef.current = resendConfirmation;
   const heading = mode === 'signup' ? 'A home for your finds.' : mode === 'reset' ? 'Let’s get you back in.' : mode === 'verify' ? 'Check your inbox.' : 'Welcome to your collection.';
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, padding: wide ? 36 : 24 }}><View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center', flex: 1 }}><View style={[ui.row, { justifyContent: 'space-between', marginBottom: wide ? 40 : 30 }]}><Brand /><View style={[ui.row, { gap: 6 }]}><LockKeyhole size={14} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Your own little world</Text></View></View><View style={{ flex: 1, flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: wide ? 80 : 28 }}>
-    <View style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', padding: wide ? 36 : 0, backgroundColor: wide ? '#EEF0E7' : undefined, borderRadius: 32, alignItems: wide ? 'flex-start' : 'center', alignSelf: wide ? 'stretch' : undefined, justifyContent: 'center', minHeight: wide ? 580 : undefined }}>
-      {wide ? <Text style={{ color: colors.coral, fontFamily: fonts.bold, letterSpacing: 2, fontSize: 11, marginBottom: 22 }}>SMALL THINGS. GOOD STORIES.</Text> : null}
-      <Text style={[ui.title, { fontSize: wide ? 64 : 38, lineHeight: wide ? 68 : 42, textAlign: wide ? 'left' : 'center' }]}>Every find has{wide ? '\n' : ' '}a story.</Text>
-      <Text style={[ui.muted, { fontSize: 16, lineHeight: 26, maxWidth: 320, marginTop: 18, textAlign: wide ? 'left' : 'center' }]}>Keep your favorite finds together, beautifully organized and entirely yours.</Text>
+    <View testID="auth-landing-panel" style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', padding: wide ? 36 : 0, backgroundColor: wide ? landing.surface : undefined, borderRadius: 32, alignItems: wide ? 'flex-start' : 'center', alignSelf: wide ? 'stretch' : undefined, justifyContent: 'center', minHeight: wide ? 580 : undefined }}>
+      {wide ? <Text style={{ color: landing.eyebrow, fontFamily: fonts.bold, letterSpacing: 2, fontSize: 11, marginBottom: 22 }}>SMALL THINGS. GOOD STORIES.</Text> : null}
+      <Text style={[ui.title, { color: landing.title, fontSize: wide ? 64 : 38, lineHeight: wide ? 68 : 42, textAlign: wide ? 'left' : 'center' }]}>Every find has{wide ? '\n' : ' '}a story.</Text>
+      <Text style={[ui.muted, { color: landing.body, fontSize: 16, lineHeight: 26, maxWidth: 320, marginTop: 18, textAlign: wide ? 'left' : 'center' }]}>Keep your favorite finds together, beautifully organized and entirely yours.</Text>
       {wide ? <View style={{ marginVertical: 24, alignSelf: 'center' }}><CollectionArtwork /></View> : null}
       {wide ? <View style={{ gap: 14 }}><View style={ui.row}><Layers3 size={17} color={colors.green} /><Text style={ui.text}>A place for every collection</Text></View><View style={ui.row}><LockKeyhole size={17} color={colors.green} /><Text style={ui.text}>Private, by default. Always yours.</Text></View></View> : null}
     </View>

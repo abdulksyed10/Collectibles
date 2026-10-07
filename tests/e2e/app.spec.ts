@@ -196,3 +196,14 @@ test('demo stays local and uses the collection-first navigation on mobile', asyn
   await expect(page.getByRole('button', { name: 'All collections', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
+
+test('dark storefront keeps the promotional panel behind its light heading dark', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('collectibles.theme-preference', 'dark'));
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/');
+
+  const panel = page.getByTestId('auth-landing-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveCSS('background-color', 'rgb(36, 54, 43)');
+  await expect(page.getByText(/Every find has/)).toHaveCSS('color', 'rgb(241, 244, 237)');
+});
