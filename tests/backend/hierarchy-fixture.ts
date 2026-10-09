@@ -9,7 +9,11 @@ export async function createHierarchyFixture(through = '~') {
     CREATE ROLE service_role BYPASSRLS;
     CREATE ROLE supabase_auth_admin;
     CREATE SCHEMA auth;
-    CREATE TABLE auth.users(id uuid PRIMARY KEY);
+    CREATE TABLE auth.users(
+      id uuid PRIMARY KEY,
+      email text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
       $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     GRANT USAGE ON SCHEMA auth TO anon, authenticated;
