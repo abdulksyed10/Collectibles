@@ -4,6 +4,7 @@ import type { AdminReviewPage, BlockedPublisher, Category, Collection, Collectio
 import { todayLocalDate } from '../domain/dates';
 import { isCollectionId, validateSharedPage } from '../domain/sharing';
 import { guestBlocks, saveGuestBlocks, publicPreferencesChanged } from '../lib/publisherPreferences';
+import { socialRepository } from '../social/repository';
 const PAGE_SIZE = 24;
 async function publicBlocksHeader() {
   const { data } = await requireClient().auth.getSession();
@@ -21,6 +22,7 @@ async function media<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 export const repository: CollectionRepository = {
+  ...socialRepository,
   async listCategories(collectionId) {
     let query = requireClient().from('categories').select('*').order('created_at').order('id').limit(50);
     if (collectionId) query = query.eq('collection_id', collectionId);

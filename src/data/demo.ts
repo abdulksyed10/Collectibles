@@ -91,7 +91,25 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
     return (words.map(word => word.length > 3 && word.endsWith('s') ? word.slice(0, -1) : word).join(' ') || 'collection');
   }
 
+  const socialUnavailable = () => { throw new Error('This social feature is not available in the demo.'); };
+
   return {
+    async getSocialCapabilities() { return { profilesEnabled: false, socialWritesEnabled: false, friendsSharingEnabled: false, likesEnabled: false }; },
+    async ensureSocialProfile() { return { publisherId: 'demo', username: 'demo_collector', introCompletedAt: '2026-01-01T12:00:00.000Z' }; },
+    async completeProfileIntro(username) { return { publisherId: 'demo', username, introCompletedAt: '2026-01-01T12:00:00.000Z' }; },
+    async updateUsername(username) { return { publisherId: 'demo', username, introCompletedAt: '2026-01-01T12:00:00.000Z' }; },
+    async getCollector() { return socialUnavailable(); },
+    async searchCollectors() { return socialUnavailable(); },
+    async listPeople() { return socialUnavailable(); },
+    async setFollowing() { return socialUnavailable(); },
+    async removeFollower() { return socialUnavailable(); },
+    async blockCollector() { return socialUnavailable(); },
+    async listFollowingEntries() { return socialUnavailable(); },
+    async listCollectorEntries() { return socialUnavailable(); },
+    async readVisibleCollection() { return socialUnavailable(); },
+    async readSharedEntry() { return socialUnavailable(); },
+    async setItemLiked() { return socialUnavailable(); },
+    async getEntrySocialState() { return socialUnavailable(); },
     async listCategories(collectionId) {
       return categories.filter(category => !collectionId || category.collection_id === collectionId).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(category => ({ ...category }));
     },

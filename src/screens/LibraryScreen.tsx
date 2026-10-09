@@ -15,6 +15,8 @@ import { CategoryEditor, CollectionEditor, ConfirmDelete, ItemEditor } from './E
 import { PublicCatalog } from './PublicCatalog';
 import { AdminReviewScreen } from './AdminReviewScreen';
 import { useTheme, type ThemePreference } from '../theme/theme';
+import { ProfileSettings } from '../social/ProfileSettings';
+import { useSocialProfile } from '../social/SocialProfileProvider';
 
 type Dialog =
   | { type: 'category'; category?: Category; collection: Collection }
@@ -25,6 +27,7 @@ type Dialog =
   | { type: 'delete-collection'; collection: Collection }
   | { type: 'delete-category'; category: Category }
   | { type: 'settings' }
+  | { type: 'profile' }
   | { type: 'blocked-publishers' }
   | { type: 'appearance' }
   | { type: 'admin-review' }
@@ -33,6 +36,7 @@ type Dialog =
 
 export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTopic }: { email: string; onExitDemo?: () => void; onPreviewShared?: (collectionId: string) => void; onPreviewTopic?: (topicKey: string) => void }) {
   const repository = useRepository();
+  const social = useSocialProfile();
   useTheme();
   const { width } = useWindowDimensions();
   const wide = width >= 900;
@@ -139,8 +143,9 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
     {dialog?.type === 'delete-item' ? <ConfirmDelete kind="item" name={dialog.item.title} action={() => repository.deleteItem(dialog.item.id)} onClose={() => setDialog(null)} onDeleted={changed} /> : null}
     {dialog?.type === 'delete-collection' ? <ConfirmDelete kind="collection" name={dialog.collection.name} action={() => repository.deleteCollection(dialog.collection.id)} onClose={() => setDialog(null)} onDeleted={() => { selectCollection(undefined); changed(); }} /> : null}
     {dialog?.type === 'delete-category' ? <ConfirmDelete kind="category" name={dialog.category.name} action={() => repository.deleteCategory(dialog.category.id)} onClose={() => setDialog(null)} onDeleted={() => { selectCategory(collectionId ?? '', undefined); changed(); }} /> : null}
-    {dialog?.type === 'settings' ? <Sheet title="Account" onClose={() => setDialog(null)} busy={signingOut}><View><Text style={ui.label}>{onExitDemo ? 'Demo' : 'Signed in as'}</Text><Text style={ui.text}>{email}</Text></View>{onExitDemo ? <Text style={ui.muted}>Demo changes reset when you leave.</Text> : null}<Button title="Appearance" secondary onPress={() => setDialog({ type: 'appearance' })} disabled={signingOut} />{isAdmin && !onExitDemo ? <Button title="Admin review" secondary onPress={() => setDialog({ type: 'admin-review' })} disabled={signingOut} /> : null}{!onExitDemo ? <Button title="Blocked collectors" secondary onPress={() => setDialog({ type: 'blocked-publishers' })} disabled={signingOut} /> : null}<PolicyLinks /><ErrorMessage message={accountError} /><Button title={onExitDemo ? 'Exit demo' : 'Sign out'} secondary icon={LogOut} loading={signingOut} onPress={() => { void signOut(); }} />{!onExitDemo ? <Button title="Delete my account" secondary danger icon={Trash2} disabled={signingOut} onPress={() => setDialog({ type: 'delete-account' })} /> : null}</Sheet> : null}
-    {dialog?.type === 'blocked-publishers' ? <BlockedPublishers onClose={() => setDialog({ type: 'settings' })} /> : null}
+    {dialog?.type === 'settings' ? <Sheet title="Account" onClose={() => setDialog(null)} busy={signingOut}><View><Text style={ui.label}>{onExitDemo ? 'Demo' : 'Signed in as'}</Text><Text style={ui.text}>{email}</Text></View>{onExitDemo ? <Text style={ui.muted}>Demo changes reset when you leave.</Text> : null}{!onExitDemo && social.capabilities.profilesEnabled ? <Button title={social.profile ? `Profile (@${social.profile.username})` : 'Profile'} secondary onPress={() => setDialog({ type: 'profile' })} disabled={!social.profile || signingOut} /> : null}{!onExitDemo && social.capabilities.profilesEnabled && !social.profile ? <Button title="Retry profile" secondary onPress={social.retry} loading={social.loading} disabled={signingOut} /> : null}<Button title="Appearance" secondary onPress={() => setDialog({ type: 'appearance' })} disabled={signingOut} />{isAdmin && !onExitDemo ? <Button title="Admin review" secondary onPress={() => setDialog({ type: 'admin-review' })} disabled={signingOut} /> : null}{!onExitDemo ? <Button title="Blocked collectors" secondary onPress={() => setDialog({ type: 'blocked-publishers' })} disabled={signingOut} /> : null}<PolicyLinks /><ErrorMessage message={social.error} /><ErrorMessage message={accountError} /><Button title={onExitDemo ? 'Exit demo' : 'Sign out'} secondary icon={LogOut} loading={signingOut} onPress={() => { void signOut(); }} />{!onExitDemo ? <Button title="Delete my account" secondary danger icon={Trash2} disabled={signingOut} onPress={() => setDialog({ type: 'delete-account' })} /> : null}</Sheet> : null}
+    {dialog?.type === 'profile' && social.profile ? <ProfileSettings profile={social.profile} mode="settings" save={social.updateUsername} onClose={() => setDialog({ type: 'settings' })} onDone={() => setDialog({ type: 'settings' })} /> : null}
+{dialog?.type === 'blocked-publishers' ? <BlockedPublishers onClose={() => setDialog({ type: 'settings' })} /> : null}
     {dialog?.type === 'appearance' ? <AppearanceEditor onClose={() => setDialog({ type: 'settings' })} /> : null}
     {dialog?.type === 'delete-account' ? <ConfirmDelete kind="account" name="your account" action={() => repository.deleteAccount()} onClose={() => setDialog(null)} onDeleted={() => { setDialog({ type: 'settings' }); void signOut(); }} /> : null}
     {dialog?.type === 'admin-review' ? <Modal visible animationType="slide" onRequestClose={() => setDialog({ type: 'settings' })}><AdminReviewScreen onClose={() => setDialog({ type: 'settings' })} /></Modal> : null}
@@ -160,6 +165,7 @@ function AppearanceEditor({ onClose }: { onClose: () => void }) {
 
 export function BlockedPublishers({ onClose }: { onClose: () => void }) {
   const repository = useRepository();
+  const social = useSocialProfile();
   const [publishers, setPublishers] = useState<BlockedPublisher[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');

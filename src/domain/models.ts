@@ -1,3 +1,5 @@
+import type { SocialRepository } from '../social/types';
+
 export type ItemVisibility = 'private' | 'public';
 export type PublicationStatus = 'private' | 'published' | 'review' | 'removed';
 
@@ -100,7 +102,7 @@ export type AdminReviewTarget = {
   hiddenAt: string | null;
 };
 export type AdminReviewPage = { targets: AdminReviewTarget[]; total: number; hasMore: boolean };
-export interface CollectionRepository {
+export interface CollectionRepository extends SocialRepository {
   listCategories(collectionId?: string): Promise<Category[]>;
   saveCategory(draft: CategoryDraft, id?: string): Promise<Category>;
   deleteCategory(categoryId: string): Promise<void>;

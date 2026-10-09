@@ -24,6 +24,7 @@ import { PublicInfoScreen, type PublicInfoPage } from './src/screens/PublicInfoS
 import { ThemeProvider, useTheme } from './src/theme/theme';
 import { handleAuthCallback } from './src/auth/oauth';
 import { publicInfoPageFromUrl } from './src/lib/publicPages';
+import { SocialProfileProvider } from './src/social/SocialProfileProvider';
 export default function App() { return <ThemeProvider><CollectiblesApp /></ThemeProvider>; }
 function CollectiblesApp() {
   const { effectiveTheme } = useTheme();
@@ -103,7 +104,7 @@ function CollectiblesApp() {
   } else if (recovery) {
     content = <RecoveryScreen onDone={finishRecovery} />;
   } else if (session) {
-    content = <RepositoryProvider value={repository}><LibraryScreen key={session.user.id} email={session.user.email ?? 'Your account'} onPreviewShared={setPreviewId} onPreviewTopic={setPreviewTopic} /></RepositoryProvider>;
+    content = <RepositoryProvider value={repository}><SocialProfileProvider key={session.user.id}><LibraryScreen key={session.user.id} email={session.user.email ?? 'Your account'} onPreviewShared={setPreviewId} onPreviewTopic={setPreviewTopic} /></SocialProfileProvider></RepositoryProvider>;
   } else if (guestExplore) {
     content = <RepositoryProvider value={repository}><GuestExploreScreen onSignIn={() => setGuestExplore(false)} onOpenCollection={setPreviewId} onOpenTopic={setPreviewTopic} /></RepositoryProvider>;
   } else {
