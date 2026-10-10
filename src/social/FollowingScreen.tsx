@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
 import { Users } from 'lucide-react-native';
 import { Button, colors, ErrorMessage, fonts, ui } from '../components/ui';
@@ -9,6 +9,8 @@ import { SharedEntryCard } from './SharedEntryCard';
 import { SharedEntryDetail } from './SharedEntryDetail';
 import type { CollectorProfile, SharedEntry } from './types';
 import { VisibleCollectionScreen } from './VisibleCollectionScreen';
+import { appendUniqueEntries, createSharedRequestGate } from './sharedLoader';
+import { useRestrictedRevalidation } from './useRestrictedRevalidation';
 
 type Props = { onLibrary: () => void; onExplore: () => void; onManagePeople: () => void };
 
@@ -27,15 +29,19 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
   const [collector, setCollector] = useState<CollectorProfile | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
-  useEffect(() => subscribeSocialInvalidation(() => setRevision(value => value + 1)), []);
+  const requests = useRef(createSharedRequestGate());
+  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  useEffect(() => subscribeSocialInvalidation(reason => { if (reason !== 'like') refresh(); }), [refresh]);
+  useRestrictedRevalidation(refresh);
   useEffect(() => {
     let active = true;
+    const request = requests.current.beginRefresh();
     setLoading(true); setError(''); setEntries([]); setCursor(null); setSelected(null);
     void repository.listFollowingEntries(undefined, friendsOnly).then(page => {
-      if (!active) return;
+      if (!active || !requests.current.isCurrent(request)) return;
       setEntries(page.items); setCursor(page.nextCursor);
-    }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : 'Unable to load Following. Try again.'); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    }).catch(reason => { if (active && requests.current.isCurrent(request)) setError(reason instanceof Error ? reason.message : 'Unable to load Following. Try again.'); }).finally(() => { if (active && requests.current.isCurrent(request)) setLoading(false); });
+    return () => { active = false; requests.current.invalidate(); };
   }, [friendsOnly, repository, revision]);
   useEffect(() => {
     let active = true;
@@ -44,14 +50,16 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
     return () => { active = false; };
   }, [repository, selected]);
   async function loadMore() {
-    if (!cursor || moreLoading) return;
+    if (!cursor || !requests.current.beginMore()) return;
+    const request = requests.current.current();
     setMoreLoading(true); setError('');
     try {
       const page = await repository.listFollowingEntries(cursor, friendsOnly);
-      setEntries(current => { const seen = new Set(current.map(entry => entry.id)); return [...current, ...page.items.filter(entry => !seen.has(entry.id))]; });
+      if (!requests.current.isCurrent(request)) return;
+      setEntries(current => appendUniqueEntries(current, page.items));
       setCursor(page.nextCursor);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load Following. Try again.'); }
-    finally { setMoreLoading(false); }
+    } catch (reason) { if (requests.current.isCurrent(request)) setError(reason instanceof Error ? reason.message : 'Unable to load Following. Try again.'); }
+    finally { if (requests.current.isCurrent(request)) { setMoreLoading(false); requests.current.endMore(); } }
   }
   function updateEntry(next: SharedEntry) { setEntries(current => current.map(entry => entry.id === next.id ? next : entry)); setSelected(current => current?.id === next.id ? next : current); }
   return <View style={{ flex: 1, width: '100%', maxWidth: 1200, alignSelf: 'center' }}>
