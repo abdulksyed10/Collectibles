@@ -14,7 +14,7 @@ before(async () => {
     "INSERT INTO auth.users(id,email,created_at) VALUES ($1,'Alex@example.test','2026-01-01'),($2,'alex@another.test','2026-01-02'),($3,'stranger@example.test','2026-01-03')",
     [alex, otherAlex, stranger],
   );
-  await db.query('UPDATE private.social_config SET profiles_enabled=true WHERE singleton=true');
+  await db.query('UPDATE private.social_config SET profiles_enabled=true, social_writes_enabled=true WHERE singleton=true');
 });
 
 after(async () => db?.close());
