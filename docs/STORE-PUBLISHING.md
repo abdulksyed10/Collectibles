@@ -108,7 +108,7 @@ In the EAS project dashboard, create these values for production, and separately
 | `EXPO_PUBLIC_ENABLE_BACKEND` | Literal string `true` |
 | `EXPO_PUBLIC_SUPABASE_URL` | `https://hoxesktykdwuvunhqnrp.supabase.co` for current production |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Current project's publishable key, never service-role key |
-| `EXPO_PUBLIC_WEB_URL` | `https://collectibles-three.vercel.app` until a chosen custom domain replaces it |
+| `EXPO_PUBLIC_WEB_URL` | `https://www.sharecollectibles.com` |
 | `EXPO_PUBLIC_TURNSTILE_SITE_KEY` | Public site key for the configured hosted challenge domain |
 | Any new public provider flags/config | Only those introduced and documented by Plan A |
 

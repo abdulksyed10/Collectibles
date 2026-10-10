@@ -5,11 +5,11 @@ The app contains the login buttons and callback handling, but they stay hidden u
 ## Before enabling the buttons
 
 1. Deploy the commit that contains `vercel.json`. It serves the Expo app for the web callback route.
-2. Set `EXPO_PUBLIC_WEB_URL` to the one production origin without a trailing slash, currently `https://collectibles-three.vercel.app`.
+2. Set `EXPO_PUBLIC_WEB_URL` to the one production origin without a trailing slash, currently `https://www.sharecollectibles.com`.
 3. In Supabase **Authentication → URL Configuration**, set the Site URL to that HTTPS origin and add exactly these Redirect URLs:
 
    ```text
-   https://collectibles-three.vercel.app/auth/callback
+   https://www.sharecollectibles.com/auth/callback
    collectibles://auth/callback
    ```
 
@@ -25,7 +25,7 @@ The app uses the Supabase browser OAuth/PKCE flow for Google on every platform a
 3. Create an **OAuth client ID** of type **Web application**. Add the production web origin as an authorized JavaScript origin:
 
    ```text
-   https://collectibles-three.vercel.app
+   https://www.sharecollectibles.com
    ```
 
 4. Add this authorized redirect URI. This is the provider callback, not the app callback:

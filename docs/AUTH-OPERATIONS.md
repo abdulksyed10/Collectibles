@@ -24,7 +24,7 @@ The recovery template must contain the six-digit recovery code expected by the a
 
 ## Turnstile and rate limits
 
-Create a Cloudflare Turnstile widget for the deployed web host, for example `collectibles-three.vercel.app`, without `https://` or a trailing path. Keep the widget secret only in **Supabase Dashboard → Authentication → Attack Protection → CAPTCHA**. The public site key belongs in the Vercel/EAS `EXPO_PUBLIC_TURNSTILE_SITE_KEY` build variable.
+Create a Cloudflare Turnstile widget for the deployed web host, currently `www.sharecollectibles.com`, without `https://` or a trailing path. Keep the widget secret only in **Supabase Dashboard → Authentication → Attack Protection → CAPTCHA**. The public site key belongs in the Vercel/EAS `EXPO_PUBLIC_TURNSTILE_SITE_KEY` build variable.
 
 In **Authentication → Rate Limits**, set conservative limits for signups, confirmation/resend emails, recovery emails, token verification, and password sign-ins. Start with a beta-sized allowance that normal users can meet, observe the logs, then adjust individual endpoints. A generic project-wide limit is not a substitute for endpoint limits.
 

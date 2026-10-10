@@ -6,7 +6,7 @@
 - `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `EXPO_PUBLIC_TURNSTILE_SITE_KEY` (real site key, never its secret)
 
-`EXPO_PUBLIC_WEB_URL` is optional for web builds. Leave it blank to use the current browser origin for authentication redirects and sharing. If supplied, it must be a public HTTPS origin such as `https://collectibles-three.vercel.app`, without a path, query or credentials. Register the site's URL in Supabase Auth's URL settings and its hostname in Turnstile. Never put a Supabase project URL here.
+`EXPO_PUBLIC_WEB_URL` is optional for web builds. Leave it blank to use the current browser origin for authentication redirects and sharing. If supplied, it must be a public HTTPS origin such as `https://www.sharecollectibles.com`, without a path, query or credentials. Register the site's URL in Supabase Auth's URL settings and its hostname in Turnstile. Never put a Supabase project URL here.
 
 Publisher defaults supplied by the owner: Abdul Syed / abdulksyed10@gmail.com. Optional overrides: `EXPO_PUBLIC_PUBLISHER_NAME`, `EXPO_PUBLIC_SUPPORT_EMAIL`. Optional sanitized web analytics uses `EXPO_PUBLIC_ENABLE_WEB_ANALYTICS=true`; default is off and native builds never mount it.
 
@@ -21,7 +21,7 @@ Publisher defaults supplied by the owner: Abdul Syed / abdulksyed10@gmail.com. O
 
 Set client config separately in **EAS preview and production** environments. Vercel variables do not carry into EAS. The preview profile builds an internal APK. Production builds signed AAB/IPA and auto-increments remote build numbers. `eas-build-post-install` runs the native release validator before compilation.
 
-Android and iOS **require** `EXPO_PUBLIC_WEB_URL=https://collectibles-three.vercel.app` in both EAS environments. Native apps do not have a browser origin; this URL hosts their CAPTCHA page and shared collection links. The web-only fallback does not relax native validation.
+Android and iOS **require** `EXPO_PUBLIC_WEB_URL=https://www.sharecollectibles.com` in both EAS environments. Native apps do not have a browser origin; this URL hosts their CAPTCHA page and shared collection links. The web-only fallback does not relax native validation.
 
 Splash artwork is configured through the SDK-compatible `expo-splash-screen` plugin, as recommended in [Expo's splash-screen documentation](https://docs.expo.dev/versions/latest/sdk/splash-screen/). `app.config.js` extends Expo's resolved `config`, including `app.json`. CI runs the pinned Expo Doctor version as well as dependency compatibility and all-platform bundle exports.
 
