@@ -33,13 +33,13 @@ export function PublicInfoScreen({ page, onBack }: { page: PublicInfoPage; onBac
     catch { setMessage('Your email app could not be opened. Copy the support address and contact us there.'); }
   }
   const content = page === 'privacy' ? <>
-    <Paragraph>Collectibles lets you keep a personal record of the things you collect. Entries are private by default. You choose whether an individual entry is submitted for public Explore.</Paragraph>
+    <Paragraph>Collectibles lets you keep a personal record of the things you collect. Entries are private by default. You choose whether each entry stays private, appears in public Explore, or is shared with mutual followers.</Paragraph>
     <Heading>Information we use</Heading>
     <Bullet>Account email and authentication session data to sign you in and secure your account.</Bullet>
     <Bullet>Collection names, categories, entry details, acquired dates, and photos that you add to provide the app.</Bullet>
     <Bullet>Basic service and security records such as upload counters, failed sign-in protection, reports, and account-deletion records.</Bullet>
     <Heading>When an entry is public</Heading>
-    <Paragraph>Only the entry title, collection name, and photo needed for Explore are shared. Notes, acquired dates, account email, storage keys, and private entries are not included. Public content can be viewed or copied by other people; removing it stops new access but cannot recall screenshots or files already saved.</Paragraph>
+    <Paragraph>Only the entry title, collection name, photo, username, follow relationship, and like count needed for sharing are visible. Usernames, follow relationships, and like counts are visible with shared entries. Notes, acquired dates, account email, storage keys, and private entries are not included. Friends-only entries are visible only to mutual followers. Public content can be viewed or copied by other people; removing it stops new access but cannot recall screenshots or files already saved.</Paragraph>
     <Heading>Service providers and retention</Heading>
     <Paragraph>Collectibles uses Supabase for authentication and database services, Cloudflare R2 for private photo storage, Cloudflare Turnstile for abuse prevention, and Vercel for the hosted web app. These services process network and security information, including IP addresses. Google and Apple process sign-in information when their login option is enabled and used. Optional web traffic analytics exclude account details, entry identifiers and authentication links. Deleting an account removes its app data and photos through the deletion flow. Resolved reports are removed after 30 days, moderation audit records after 90 days, and short-term signup/report counters after two days. Open reports remain until resolved. Minimal photo deletion guards and lifetime storage counters remain to prevent late writes and limit abuse. Provider deletion failures are retried and retained until resolved. Service logs and backups follow each provider’s configured retention; a restored backup must have deletions reapplied before use.</Paragraph>
     <Heading>Your choices</Heading>
@@ -47,8 +47,8 @@ export function PublicInfoScreen({ page, onBack }: { page: PublicInfoPage; onBac
   </> : page === 'terms' ? <>
     <Paragraph>Use Collectibles to organize your own collection and to share entries you are allowed to share. You are responsible for the accuracy of your entries and for respecting other people’s rights.</Paragraph>
     <Heading>Public sharing</Heading>
-    <Bullet>Public visibility applies to each entry, not an entire collection or category.</Bullet>
-    <Bullet>Public entries appear in Explore when shared. They may later be limited, removed, or reviewed after member reports.</Bullet>
+    <Bullet>Visibility applies to each entry, not an entire collection or category. Friends-only entries are available only when two collectors follow each other.</Bullet>
+    <Bullet>Public entries appear in Explore when shared. Content can be hidden for review after reports from five different signed-in members.</Bullet>
     <Bullet>Do not upload unlawful, infringing, deceptive, private, or harmful content.</Bullet>
     <Heading>Account and service</Heading>
     <Paragraph>Keep your account credentials private. Do not attempt to bypass limits, scrape the service, interfere with its operation, or use it to harass others. We may suspend public publishing or restrict access when needed to protect people or the service.</Paragraph>
@@ -62,7 +62,7 @@ export function PublicInfoScreen({ page, onBack }: { page: PublicInfoPage; onBac
     <Bullet>Someone else’s private information, including addresses, contact details, account credentials, or photos you do not have permission to publish.</Bullet>
     <Bullet>Copyrighted or trademarked material when you do not have the right to share it.</Bullet>
     <Heading>Reporting and blocking</Heading>
-    <Paragraph>Visitors and signed-in users can report an entry or collection and block a collector from their own Explore view. Guest blocks apply on that device; account blocks apply when signed in. Reports are reviewed by the app operator. Content may be removed and repeated violations can lead to publishing restrictions.</Paragraph>
+    <Paragraph>Only signed-in members can report shared content. Reports from five different signed-in members hide the reported entry or collection from Explore and send it to review. Anyone can block a collector from their own view: guest blocks apply on that device, while signed-in blocks apply to the account. Blocking does not hide a collector’s content for other people. Content may be removed and repeated violations can lead to publishing restrictions.</Paragraph>
   </> : page === 'support' ? <>
     <Paragraph>Need help with Collectibles? Include your account email, device type, app version, and a short description of the problem. Do not send your password, recovery code, R2 keys, or other credentials.</Paragraph>
     {canContact ? <Button title={`Email ${address}`} icon={Mail} onPress={() => { void openSupport('Collectibles support request'); }} /> : <Text style={[ui.text, { color: colors.danger }]}>Email support is temporarily unavailable.</Text>}
@@ -85,7 +85,7 @@ export function PublicInfoScreen({ page, onBack }: { page: PublicInfoPage; onBac
       <View style={{ gap: 14 }}>{content}</View>
       <Text selectable style={ui.muted}>Contact: {address}</Text>
       <View style={{ borderTopWidth: 1, borderColor: colors.line, paddingTop: 16, gap: 8 }}>
-        <Text style={[ui.muted, { fontSize: 12 }]}>Collectibles · Last updated October 4, 2026</Text>
+        <Text style={[ui.muted, { fontSize: 12 }]}>Collectibles · Last updated October 10, 2026</Text>
         {Platform.OS === 'web' ? <Pressable accessibilityRole="link" onPress={onBack} style={{ minHeight: 40, justifyContent: 'center' }}><Text style={{ color: colors.green, fontFamily: fonts.bold }}>Return to Collectibles</Text></Pressable> : null}
       </View>
     </ScrollView>

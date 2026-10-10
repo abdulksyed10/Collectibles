@@ -60,5 +60,8 @@
     "supabase": "2.117.0",
     "tsx": "^4.20.0",
     "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "shell-quote": "1.11.0"
   }
 }
