@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ProfileSettings } from './ProfileSettings';
 import { invalidateSocial } from './events';
 import { profileSetupState } from './profileFlow';
 import type { OwnSocialProfile, SocialCapabilities } from './types';
 import { disabledSocialCapabilities } from './repository';
 import { useRepository } from '../data/RepositoryProvider';
+import { createLikeStore, type LikeStore } from './likeStore';
 
 type SocialProfileContextValue = {
   guest: boolean;
@@ -12,6 +13,7 @@ type SocialProfileContextValue = {
   profile: OwnSocialProfile | null;
   loading: boolean;
   error: string;
+  likes: LikeStore;
   completeProfileIntro: (username: string) => Promise<OwnSocialProfile>;
   updateUsername: (username: string) => Promise<OwnSocialProfile>;
   retry: () => void;
@@ -32,6 +34,7 @@ export function SocialProfileProvider({ children, guest = false }: { children: R
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryVersion, setRetryVersion] = useState(0);
+  const likes = useMemo(() => createLikeStore(repository), [repository]);
 
   useEffect(() => {
     let current = true;
@@ -56,6 +59,7 @@ export function SocialProfileProvider({ children, guest = false }: { children: R
   }, [guest, repository, retryVersion]);
 
   useEffect(() => () => { invalidateSocial('session'); }, []);
+  useEffect(() => () => { likes.clear(); }, [likes]);
 
   async function completeProfileIntro(username: string) {
     const next = await repository.completeProfileIntro(username);
@@ -70,7 +74,7 @@ export function SocialProfileProvider({ children, guest = false }: { children: R
     return next;
   }
 
-  const value: SocialProfileContextValue = { guest, capabilities, profile, loading, error, completeProfileIntro, updateUsername, retry: () => setRetryVersion(value => value + 1) };
+  const value: SocialProfileContextValue = { guest, capabilities, profile, loading, error, likes, completeProfileIntro, updateUsername, retry: () => setRetryVersion(value => value + 1) };
   const setup = profileSetupState(capabilities, profile);
   return <SocialProfileContext.Provider value={value}>{children}{setup === 'intro' && profile ? <ProfileSettings profile={profile} mode="intro" save={completeProfileIntro} onClose={() => undefined} onDone={() => undefined} /> : null}</SocialProfileContext.Provider>;
 }

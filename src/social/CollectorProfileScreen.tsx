@@ -12,9 +12,11 @@ import { appendUniqueEntries, createSharedRequestGate } from './sharedLoader';
 import type { CollectorProfile, SharedEntry } from './types';
 import { useRestrictedRevalidation } from './useRestrictedRevalidation';
 import { VisibleCollectionScreen } from './VisibleCollectionScreen';
+import { useSocialProfile } from './SocialProfileProvider';
 
 export function CollectorProfileScreen({ publisherId, onClose, onSignIn }: { publisherId: string; onClose: () => void; onSignIn?: () => void }) {
   const repository = useRepository();
+  const social = useSocialProfile();
   const { width } = useWindowDimensions();
   const columns = width >= 1000 ? 4 : width >= 650 ? 3 : 2;
   const [profile, setProfile] = useState<CollectorProfile | null>(null);
@@ -69,12 +71,12 @@ export function CollectorProfileScreen({ publisherId, onClose, onSignIn }: { pub
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onClose} />{onSignIn ? <Button title="Sign in" secondary onPress={onSignIn} /> : null}</View>
     <FlatList key={columns} data={entries} keyExtractor={entry => entry.id} numColumns={columns} contentContainerStyle={{ padding: width >= 900 ? 32 : 16, flexGrow: 1, paddingBottom: 40 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
-      ListHeaderComponent={<View style={{ gap: 12, paddingBottom: 18 }}><View style={[ui.row, { gap: 12 }]}><View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 20 }}>{handle[0]?.toUpperCase() ?? 'C'}</Text></View><View><Text style={[ui.title, { fontSize: 30 }]}>@{handle}</Text><Text style={ui.muted}>Collector</Text></View></View>{profile ? <FollowButton collector={profile} onChanged={relationship => setProfile(current => current ? { ...current, relationship } : current)} /> : null}<ErrorMessage message={error} />{error ? <Button title="Try again" secondary onPress={refresh} /> : null}</View>}
-      renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 7 }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onOpenCollector={() => undefined} onLikeChanged={updateEntry} /></View>}
+      ListHeaderComponent={<View style={{ gap: 12, paddingBottom: 18 }}><View style={[ui.row, { gap: 12 }]}><View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 20 }}>{handle[0]?.toUpperCase() ?? 'C'}</Text></View><View><Text style={[ui.title, { fontSize: 30 }]}>@{handle}</Text><Text style={ui.muted}>Collector</Text></View></View>{profile && profile.publisherId !== social.profile?.publisherId ? <FollowButton collector={profile} onChanged={relationship => setProfile(current => current ? { ...current, relationship } : current)} onSignIn={onSignIn} /> : null}<ErrorMessage message={error} />{error ? <Button title="Try again" secondary onPress={refresh} /> : null}</View>}
+      renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 7 }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onLikeChanged={updateEntry} onSignIn={onSignIn} /></View>}
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 30 }} /> : !error ? <View style={{ alignItems: 'center', padding: 30, gap: 8 }}><UserRound size={38} color={colors.muted} /><Text style={ui.muted}>No shared items to show.</Text></View> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <SharedEntryDetail entry={selected} collector={profile} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onEntryChanged={updateEntry} onReported={refresh} /> : null}
-    {collectionId ? <Modal visible animationType="slide" onRequestClose={() => setCollectionId(null)}><VisibleCollectionScreen collectionId={collectionId} onClose={() => setCollectionId(null)} /></Modal> : null}
+    {selected ? <SharedEntryDetail entry={selected} collector={profile} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onEntryChanged={updateEntry} onReported={refresh} onSignIn={onSignIn} /> : null}
+    {collectionId ? <Modal visible animationType="slide" onRequestClose={() => setCollectionId(null)}><VisibleCollectionScreen collectionId={collectionId} onClose={() => setCollectionId(null)} onSignIn={onSignIn} /></Modal> : null}
   </SafeAreaView>;
 }

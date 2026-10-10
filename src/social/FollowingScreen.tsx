@@ -71,7 +71,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
           <Pressable accessibilityRole="button" accessibilityLabel="Explore" onPress={onExplore} style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: 'center' }}><Text style={{ fontFamily: fonts.medium, color: colors.muted }}>Explore</Text></Pressable>
         </View>
         <View style={[ui.row, { justifyContent: 'space-between' }]}><View><Text style={[ui.title, { fontSize: width >= 900 ? 36 : 30 }]}>Following</Text><Text style={ui.muted}>New items from collectors you follow.</Text></View><Button title="Find people" secondary icon={Users} onPress={onManagePeople} /></View>
-        <View style={{ flexDirection: 'row', gap: 8 }}><Button title="All following" secondary={!friendsOnly} onPress={() => setFriendsOnly(false)} /><Button title="Friends only" secondary={friendsOnly} onPress={() => setFriendsOnly(true)} /></View>
+        <View style={{ flexDirection: 'row', gap: 8 }}><Button title="All following" secondary={friendsOnly} onPress={() => setFriendsOnly(false)} /><Button title="Friends only" secondary={!friendsOnly} onPress={() => setFriendsOnly(true)} /></View>
         <ErrorMessage message={error} />{error ? <Button title="Try again" secondary onPress={() => setRevision(value => value + 1)} /> : null}
       </View>}
       renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 7 }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onOpenCollector={() => setProfileId(item.publisherId)} onLikeChanged={updateEntry} /></View>}

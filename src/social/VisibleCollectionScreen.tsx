@@ -14,7 +14,7 @@ import type { CollectorProfile, SharedEntry, VisibleCollection } from './types';
 import { useSocialProfile } from './SocialProfileProvider';
 import { useRestrictedRevalidation } from './useRestrictedRevalidation';
 
-export function VisibleCollectionScreen({ collectionId, onClose }: { collectionId: string; onClose: () => void }) {
+export function VisibleCollectionScreen({ collectionId, onClose, onSignIn }: { collectionId: string; onClose: () => void; onSignIn?: () => void }) {
   const repository = useRepository();
   const social = useSocialProfile();
   const { width } = useWindowDimensions();
@@ -77,11 +77,11 @@ export function VisibleCollectionScreen({ collectionId, onClose }: { collectionI
     <View style={[ui.row, { padding: 16, borderBottomWidth: 1, borderColor: colors.line }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onClose} /></View>
     <FlatList key={columns} data={entries} keyExtractor={entry => entry.id} numColumns={columns} contentContainerStyle={{ padding: width >= 900 ? 32 : 16, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ paddingBottom: 16, gap: 5 }}>{data ? <><Text style={[ui.muted, { fontSize: 12 }]}>Shared collection</Text><Text style={ui.title}>{data.collection.name}</Text><Text style={ui.muted}>{data.visibleItemCount} {data.visibleItemCount === 1 ? 'item' : 'items'}</Text><PublicSafetyControls repository={repository} collectionId={data.collection.id} itemLabel="this shared collection" sharedPublisherId={data.collection.creator.publisherId} signedIn={!social.guest} isOwnContent={social.profile?.publisherId === data.collection.creator.publisherId} onReported={refresh} onBlocked={onClose} /></> : null}<ErrorMessage message={error} />{error ? <Button title="Try again" secondary onPress={refresh} /> : null}</View>}
-      renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 7 }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onOpenCollector={() => setProfileId(item.publisherId)} onLikeChanged={updateEntry} /></View>}
+      renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 7 }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onOpenCollector={() => setProfileId(item.publisherId)} onLikeChanged={updateEntry} onSignIn={onSignIn} /></View>}
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 30 }} /> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <SharedEntryDetail entry={selected} collector={owner} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => undefined} showCollectionButton={false} onEntryChanged={updateEntry} onReported={refresh} onBlocked={onClose} /> : null}
-    {profileId ? <Modal visible animationType="slide" onRequestClose={() => setProfileId(null)}><CollectorProfileScreen publisherId={profileId} onClose={() => setProfileId(null)} /></Modal> : null}
+    {selected ? <SharedEntryDetail entry={selected} collector={owner} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => undefined} showCollectionButton={false} onEntryChanged={updateEntry} onReported={refresh} onBlocked={onClose} onSignIn={onSignIn} /> : null}
+    {profileId ? <Modal visible animationType="slide" onRequestClose={() => setProfileId(null)}><CollectorProfileScreen publisherId={profileId} onClose={() => setProfileId(null)} onSignIn={onSignIn} /></Modal> : null}
   </SafeAreaView>;
 }
