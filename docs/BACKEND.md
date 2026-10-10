@@ -13,6 +13,33 @@ This backend requires a user-owned Supabase project and a **private** Cloudflare
 5. Deploy `supabase functions deploy media` and `supabase functions deploy public-media`. JWT verification is performed inside the function with Supabase Auth `getUser(token)`; `verify_jwt=false` avoids the legacy gateway verifier rejecting new asymmetric JWTs. It does **not** permit unauthenticated owner actions. The separate `public-media` function permits anonymous reads only after resolving the canonical/legacy collection scope and confirming the requested item is public. See [collection sharing](COLLECTION-SHARING.md).
 6. Configure the mobile app with only the Supabase URL and publishable/anonymous key described in the root README.
 
+## Social rollout
+
+The social migrations are additive and start with all social capability flags off. Apply them before releasing a client that offers profiles, following, Friends-only sharing, or likes. Keep the R2 bucket private: the `member-media` Edge Function is the only path that delivers Friends-only image bytes, after it verifies the current access token, relationship, moderation state, quotas, and allowed web origin.
+
+1. Back up the current schema and inspect `npx supabase db push --dry-run`. Apply the pending social migrations in their recorded order; do not edit or rerun an applied migration.
+2. Confirm `MEDIA_ALLOWED_ORIGINS` contains every exact hosted browser origin, including `https://www.sharecollectibles.com`. The existing server-only R2 and database settings are reused; no new client secret or R2 key is needed.
+3. Deploy `member-media` alongside the current `media` and `public-media` functions:
+
+   ```powershell
+   npx supabase secrets set --env-file supabase/.env.local
+   npx supabase functions deploy member-media --use-api
+   ```
+
+4. With disposable accounts, verify public, one-way follow, mutual follow, blocked, and signed-out access. A Friends-only entry must never return metadata or a photo to a non-mutual account. Also test that revoking a follow or blocking a collector takes effect on the next image request.
+5. Enable flags in stages from a trusted SQL session: profiles first, then social writes and public Following; enable Friends sharing only after the `member-media` checks; enable likes last. The private `social_config` row supports pausing each capability without deleting user data.
+
+   ```sql
+   update private.social_config
+   set profiles_enabled = true,
+       social_writes_enabled = true,
+       friends_sharing_enabled = true,
+       likes_enabled = true
+   where singleton = true;
+   ```
+
+Do not enable any flag merely because a frontend is deployed. If a rollout needs to stop, set the affected flag back to `false`; existing data remains private and unavailable through the corresponding social surfaces.
+
 ## Auth admission and bot protection
 
 The app requires passwords with at least eight characters, one uppercase letter, one lowercase letter, and one number. Match this in hosted Supabase Auth before opening signups. The client also pauses a device’s sign-in form for 60 seconds after five incorrect attempts in ten minutes, but that is only a user-experience limit; server controls remain authoritative.

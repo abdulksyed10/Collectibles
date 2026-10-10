@@ -1,4 +1,4 @@
-import type { SocialRepository } from '../social/types';
+import type { CollectorIdentity, LikeState, Relationship, SocialRepository } from '../social/types';
 
 export type ItemVisibility = 'private' | 'friends' | 'public';
 export type PublicationStatus = 'private' | 'published' | 'review' | 'removed';
@@ -86,6 +86,11 @@ export type PublicEntryCard = {
   collectionId: string;
   collectionName: string;
   publisherId?: string;
+  creator?: CollectorIdentity;
+  createdAt?: string;
+  audience?: 'public' | 'friends';
+  relationship?: Relationship;
+  likes?: LikeState;
 };
 export type PublicEntryPage = { entries: PublicEntryCard[]; total: number; hasMore: boolean };
 export type PublicTopicDetail = { topic: { key: string; name: string }; entries: PublicEntryCard[]; total: number; hasMore: boolean };

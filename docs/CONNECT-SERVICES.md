@@ -70,9 +70,12 @@ After local tests and migration checks pass:
 npx supabase secrets set --env-file supabase/.env.local --project-ref hoxesktykdwuvunhqnrp
 npx supabase functions deploy media --project-ref hoxesktykdwuvunhqnrp --use-api
 npx supabase functions deploy public-media --project-ref hoxesktykdwuvunhqnrp --use-api
+npx supabase functions deploy member-media --project-ref hoxesktykdwuvunhqnrp --use-api
 ```
 
 The `media` function validates user sessions itself and rejects unauthenticated requests. It handles photos, signed read URLs, deletions and account cleanup. `public-media` allows anonymous image reads only for explicitly public collections after verifying membership and visibility. `--use-api` bundles on Supabase, so deployment does not require a running local Docker stack.
+
+`member-media` is for signed-in Friends-only image reads. It rechecks the viewer's current mutual-follow relationship, blocks, publication state and per-account/application budgets before fetching a private R2 object. Its browser CORS origins come from `MEDIA_ALLOWED_ORIGINS`; keep the bucket private and do not issue client R2 credentials or public signed links for Friends-only photos.
 
 ## 6. Configure Auth and test live behavior
 

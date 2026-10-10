@@ -11,6 +11,7 @@ import { AcquiredDateField } from '../components/AcquiredDateField';
 import { Button, colors, ErrorMessage, Field, fonts, messageOf, Sheet, ui } from '../components/ui';
 
 import { useContributionPolicy } from '../components/ContributionPolicy';
+import { useSocialProfile } from '../social/SocialProfileProvider';
 
 function Choices({ label, options, value, onChange, disabled }: { label: string; options: { id: string; name: string; subtitle?: string }[]; value: string; onChange: (id: string) => void; disabled?: boolean }) {
   return <View><Text style={ui.label}>{label}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{options.map(option => <Pressable key={option.id} accessibilityRole="button" accessibilityLabel={`${label}: ${option.name}`} accessibilityState={{ selected: value === option.id }} {...(Platform.OS === 'web' ? { 'aria-pressed': value === option.id } : {})} onPress={() => onChange(option.id)} disabled={disabled} style={{ minHeight: 48, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 12, backgroundColor: value === option.id ? colors.green : colors.card, borderWidth: 1, borderColor: colors.line }}><Text style={{ fontFamily: fonts.medium, color: value === option.id ? '#FFF' : colors.ink }}>{option.name}</Text>{option.subtitle ? <Text style={{ color: value === option.id ? '#E8EFE8' : colors.muted, fontSize: 11 }}>{option.subtitle}</Text> : null}</Pressable>)}</ScrollView></View>;
@@ -71,6 +72,7 @@ export function CollectionEditor({ collection, onClose, onSaved, onDelete }: { c
 export function ItemEditor({ item, image, collections, categories, initialCollection, initialCategory, onClose, onSaved }: { item?: Item; image?: ItemImage; collections: Collection[]; categories: Category[]; initialCollection?: string; initialCategory?: string; onClose: () => void; onSaved: () => void }) {
   const repository = useRepository();
   const policy = useContributionPolicy(repository);
+  const social = useSocialProfile();
   const [title, setTitle] = useState(item?.title ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [collectionId, setCollectionId] = useState(item?.collection_id ?? initialCollection ?? collections[0]?.id ?? '');
@@ -149,8 +151,8 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     <Choices label="Category" options={categoryOptions} value={creatingCategory ? '__new_category__' : categoryId} onChange={chooseCategory} disabled={busy} />
     {creatingCategory ? <Field label="New category name" placeholder="e.g. National parks" value={newCategoryName} onChangeText={setNewCategoryName} maxLength={80} editable={!busy} /> : null}
     <AcquiredDateField value={acquiredOn} onChange={setAcquiredOn} disabled={busy} />
-    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, { id: 'public', name: 'Public' }]} value={visibility} onChange={value => { setVisibility(value as ItemVisibility); }} disabled={busy} />
-    <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'This item will be reviewed before it appears in Explore. Notes stay private.' : visibility === 'friends' ? 'Only mutual follows can view this item. Notes stay private.' : 'Only you can view this item.'}</Text>
+    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, ...(social.capabilities.friendsSharingEnabled || item?.visibility === 'friends' ? [{ id: 'friends', name: 'Friends only' }] : []), { id: 'public', name: 'Public' }]} value={visibility} onChange={value => { setVisibility(value as ItemVisibility); }} disabled={busy} />
+    <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'Anyone can see this item in Explore. Notes stay private.' : visibility === 'friends' ? 'Only people you follow who also follow you can see this item. Notes stay private.' : 'Only you can view this item.'}</Text>
     <Field label="Notes (optional)" placeholder="Item notes" value={notes} onChangeText={setNotes} maxLength={2000} multiline editable={!busy} />
     {policy.element}<ErrorMessage message={error} /><Button title={item || savedId ? 'Save item' : 'Add item'} icon={Check} onPress={() => { void save(); }} loading={busy} disabled={picking} />
   </Sheet>;

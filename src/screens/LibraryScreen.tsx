@@ -18,6 +18,7 @@ import { useTheme, type ThemePreference } from '../theme/theme';
 import { ProfileSettings } from '../social/ProfileSettings';
 import { useSocialProfile } from '../social/SocialProfileProvider';
 import { PeopleScreen } from '../social/PeopleScreen';
+import { FollowingScreen } from '../social/FollowingScreen';
 
 type Dialog =
   | { type: 'category'; category?: Category; collection: Collection }
@@ -43,7 +44,7 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
   const { width } = useWindowDimensions();
   const wide = width >= 900;
   const columns = width >= 1180 ? 4 : width >= 620 ? 3 : 2;
-  const [tab, setTab] = useState<'library' | 'explore'>('library');
+  const [tab, setTab] = useState<'library' | 'following' | 'explore'>('library');
   const [categoryId, setCategoryId] = useState<string>();
   const [collectionId, setCollectionId] = useState<string>();
   const [search, setSearch] = useState('');
@@ -102,6 +103,7 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
   const itemCollection = (item: Item) => library.collections.find(value => value.id === item.collection_id);
   const publicationLabel = (item: Item) => {
     if (item.visibility === 'private') return 'Private';
+    if (item.visibility === 'friends') return item.publication?.status === 'published' ? 'Friends only' : 'Under review';
     if (item.publication?.status === 'published') return 'Public';
     if (item.publication?.status === 'removed') return 'Not published';
     return 'Under review';
@@ -115,6 +117,7 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
     {onExitDemo ? <Text style={[ui.muted, { fontSize: 12 }]}>Demo · Changes reset when you leave.</Text> : null}
     <View style={{ flexDirection: 'row', gap: 8, borderBottomWidth: 1, borderColor: colors.line }}>
       <Pressable accessibilityRole="button" accessibilityLabel="My collections" accessibilityState={{ selected: tab === 'library' }} {...(Platform.OS === 'web' ? { 'aria-pressed': tab === 'library' } : {})} onPress={() => setTab('library')} style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: 'center', borderBottomWidth: tab === 'library' ? 3 : 0, borderBottomColor: colors.green }}><Text style={{ fontFamily: tab === 'library' ? fonts.bold : fonts.medium, color: tab === 'library' ? colors.green : colors.muted }}>My collections</Text></Pressable>
+      {!onExitDemo && social.capabilities.profilesEnabled ? <Pressable accessibilityRole="button" accessibilityLabel="Following" accessibilityState={{ selected: tab === 'following' }} {...(Platform.OS === 'web' ? { 'aria-pressed': tab === 'following' } : {})} onPress={() => setTab('following')} style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: 'center', borderBottomWidth: tab === 'following' ? 3 : 0, borderBottomColor: colors.green }}><Text style={{ fontFamily: tab === 'following' ? fonts.bold : fonts.medium, color: tab === 'following' ? colors.green : colors.muted }}>Following</Text></Pressable> : null}
       <Pressable accessibilityRole="button" accessibilityLabel="Explore" accessibilityState={{ selected: tab === 'explore' }} {...(Platform.OS === 'web' ? { 'aria-pressed': tab === 'explore' } : {})} onPress={() => setTab('explore')} style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: 'center', borderBottomWidth: tab === 'explore' ? 3 : 0, borderBottomColor: colors.green }}><Text style={{ fontFamily: tab === 'explore' ? fonts.bold : fonts.medium, color: tab === 'explore' ? colors.green : colors.muted }}>Explore</Text></Pressable>
     </View>
     <View style={[ui.row, { justifyContent: 'space-between', minHeight: 48 }]}>
@@ -131,7 +134,7 @@ export function LibraryScreen({ email, onExitDemo, onPreviewShared, onPreviewTop
   </View>;
 
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><View style={[ui.row, { paddingHorizontal: wide ? 32 : 16, minHeight: 56, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}><Brand small={!wide} onPress={() => { setTab('library'); selectCollection(undefined); }} /><Pressable accessibilityRole="button" accessibilityLabel="Account settings" onPress={() => setDialog({ type: 'settings' })} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: colors.pale }}><Text style={{ color: colors.green, fontFamily: fonts.bold }}>{email[0]?.toUpperCase() ?? 'Y'}</Text></Pressable></View>
-    {tab === 'explore' ? <PublicCatalog demo={Boolean(onExitDemo)} onLibrary={() => setTab('library')} onOpenCollection={id => onPreviewShared?.(id)} onOpenTopic={key => onPreviewTopic?.(key)} /> : <View style={{ flex: 1, flexDirection: 'row', width: '100%', maxWidth: 1500, alignSelf: 'center' }}>
+    {tab === 'following' ? <FollowingScreen onLibrary={() => setTab('library')} onExplore={() => setTab('explore')} onManagePeople={() => setDialog({ type: 'people' })} /> : tab === 'explore' ? <PublicCatalog demo={Boolean(onExitDemo)} socialActions={!onExitDemo && social.capabilities.profilesEnabled && social.capabilities.socialWritesEnabled} ownPublisherId={social.profile?.publisherId} onLibrary={() => setTab('library')} onOpenCollection={id => onPreviewShared?.(id)} onOpenTopic={key => onPreviewTopic?.(key)} /> : <View style={{ flex: 1, flexDirection: 'row', width: '100%', maxWidth: 1500, alignSelf: 'center' }}>
       {wide ? <View style={{ width: 260, padding: 16, borderRightWidth: 1, borderColor: colors.line }}><CollectionNavigator collections={library.collections} categories={library.categories} selectedCollectionId={collectionId} selectedCategoryId={categoryId} onSelectCollection={selectCollection} onSelectCategory={selectCategory} onAddCollection={() => setDialog({ type: 'collection' })} onAddCategory={openCategory} /></View> : null}
       <FlatList key={columns} data={library.items} keyExtractor={item => item.id} numColumns={columns} style={{ flex: 1 }} contentContainerStyle={{ padding: wide ? 32 : 16, paddingBottom: 50, flexGrow: 1 }} ListHeaderComponent={header} refreshControl={<RefreshControl refreshing={library.loading} onRefresh={library.refresh} tintColor={colors.green} />} renderItem={({ item }) => {
         const image = library.images[item.id]; const itemParent = itemCollection(item); const itemGroup = itemCategory(item);

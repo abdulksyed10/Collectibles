@@ -24,7 +24,7 @@ export function useSocialProfile() {
   return value;
 }
 
-export function SocialProfileProvider({ children }: { children: ReactNode }) {
+export function SocialProfileProvider({ children, guest = false }: { children: ReactNode; guest?: boolean }) {
   const repository = useRepository();
   const [capabilities, setCapabilities] = useState<SocialCapabilities>(disabledSocialCapabilities);
   const [profile, setProfile] = useState<OwnSocialProfile | null>(null);
@@ -40,7 +40,7 @@ export function SocialProfileProvider({ children }: { children: ReactNode }) {
         const nextCapabilities = await repository.getSocialCapabilities();
         if (!current) return;
         setCapabilities(nextCapabilities);
-        if (nextCapabilities.profilesEnabled) {
+        if (nextCapabilities.profilesEnabled && !guest) {
           const nextProfile = await repository.ensureSocialProfile();
           if (!current) return;
           setProfile(nextProfile);
@@ -52,7 +52,7 @@ export function SocialProfileProvider({ children }: { children: ReactNode }) {
       }
     })();
     return () => { current = false; };
-  }, [repository, retryVersion]);
+  }, [guest, repository, retryVersion]);
 
   useEffect(() => () => { invalidateSocial('session'); }, []);
 

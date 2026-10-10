@@ -92,6 +92,15 @@ function readSharedPage(value: unknown): CursorPage<SharedEntry> {
   if (!isRecord(value) || !Array.isArray(value.items)) throw new Error('Unable to load shared entries. Try again.');
   return { items: value.items.map(readSharedEntry), nextCursor: cursorFrom(value.nextCursor) };
 }
+function readLikeMap(value: unknown): Record<string, LikeState> {
+  if (!isRecord(value)) throw new Error('Unable to load item reactions. Try again.');
+  const result: Record<string, LikeState> = {};
+  for (const [itemId, state] of Object.entries(value)) {
+    if (!UUID.test(itemId)) throw new Error('Unable to load item reactions. Try again.');
+    result[itemId] = readLikeState(state);
+  }
+  return result;
+}
 function readVisibleCollection(value: unknown): VisibleCollection {
   if (!isRecord(value) || !isRecord(value.collection) || typeof value.collection.id !== 'string' || !UUID.test(value.collection.id) || typeof value.collection.name !== 'string') throw new Error('Unable to load this collection. Try again.');
   const count = value.visibleItemCount;
@@ -173,6 +182,16 @@ export const socialRepository: SocialRepository = {
     if (error) throw new Error(socialActionMessage(error, 'Unable to load this entry. Try again.'));
     return data === null ? null : readSharedEntry(data);
   },
-  async setItemLiked(_itemId, _liked): Promise<void> { return unavailable(); },
-  async getEntrySocialState(_itemIds): Promise<Record<string, LikeState>> { return unavailable(); },
+  async setItemLiked(itemId, liked) {
+    const { error } = await requireClient().rpc('set_item_liked', { p_item_id: requireId(itemId, 'Entry unavailable.'), p_liked: liked });
+    if (error) throw new Error(socialActionMessage(error, 'Unable to update this like. Try again.'));
+    invalidateSocial('like');
+  },
+  async getEntrySocialState(itemIds) {
+    const ids = [...new Set(itemIds.map(itemId => requireId(itemId, 'Entry unavailable.')))];
+    if (ids.length > 24) throw new Error('Too many entries.');
+    const { data, error } = await requireClient().rpc('get_entry_social_state', { p_item_ids: ids });
+    if (error) throw new Error(socialActionMessage(error, 'Unable to load item reactions. Try again.'));
+    return readLikeMap(data);
+  },
 };

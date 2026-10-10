@@ -25,6 +25,9 @@ import { ThemeProvider, useTheme } from './src/theme/theme';
 import { handleAuthCallback } from './src/auth/oauth';
 import { publicInfoPageFromUrl } from './src/lib/publicPages';
 import { SocialProfileProvider } from './src/social/SocialProfileProvider';
+import { socialDestinationFromUrl, type SocialDestination } from './src/social/links';
+import { CollectorProfileScreen } from './src/social/CollectorProfileScreen';
+import { SharedEntryScreen } from './src/social/SharedEntryScreen';
 export default function App() { return <ThemeProvider><CollectiblesApp /></ThemeProvider>; }
 function CollectiblesApp() {
   const { effectiveTheme } = useTheme();
@@ -32,6 +35,7 @@ function CollectiblesApp() {
   const { session, loading, recovery, finishRecovery } = useSession();
   const [demo, setDemo] = useState<CollectionRepository | null>(null);
   const [sharedId, setSharedId] = useState<string | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? sharedIdFromUrl(window.location.href) : null);
+  const [socialDestination, setSocialDestination] = useState<SocialDestination | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? socialDestinationFromUrl(window.location.href) : null);
   const [publicInfoPage, setPublicInfoPage] = useState<PublicInfoPage | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? publicInfoPageFromUrl(window.location.href) : null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [guestExplore, setGuestExplore] = useState(false);
@@ -66,6 +70,7 @@ function CollectiblesApp() {
       if (active) {
         setPublicInfoPage(publicInfoPageFromUrl(url));
         setSharedId(sharedIdFromUrl(url));
+        setSocialDestination(socialDestinationFromUrl(url));
       }
     };
     if (Platform.OS === 'web') {
@@ -85,6 +90,13 @@ function CollectiblesApp() {
       window.history.replaceState({}, '', url.toString());
     }
   }
+  function leaveSocialDestination() {
+    setSocialDestination(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href); url.searchParams.delete('collector'); url.searchParams.delete('item');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
   function leavePublicInfoPage() {
     setPublicInfoPage(null);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -95,12 +107,14 @@ function CollectiblesApp() {
   let content;
   if (publicInfoPage) {
     content = <PublicInfoScreen page={publicInfoPage} onBack={leavePublicInfoPage} />;
-  } else if ((!fontsLoaded && !fontError) || (loading && !sharedId)) {
+  } else if ((!fontsLoaded && !fontError) || (loading && !sharedId && !socialDestination)) {
     content = <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.paper }}><ActivityIndicator color={colors.green} /><Text style={{ marginTop: 14, color: colors.ink }}>Opening your collection…</Text></View>;
   } else if (sharedId) {
     content = <SharedCollectionScreen collectionId={sharedId} repository={repository} onBack={leaveSharedView} />;
+  } else if (socialDestination) {
+    content = <RepositoryProvider value={repository}><SocialProfileProvider guest={!session}>{socialDestination.type === 'collector' ? <CollectorProfileScreen publisherId={socialDestination.id} onClose={leaveSocialDestination} /> : <SharedEntryScreen itemId={socialDestination.id} onClose={leaveSocialDestination} />}</SocialProfileProvider></RepositoryProvider>;
   } else if (demo) {
-    content = <RepositoryProvider value={demo}><LibraryScreen key="demo" email="Demo collector" onPreviewShared={setPreviewId} onPreviewTopic={setPreviewTopic} onExitDemo={() => { setPreviewId(null); setPreviewTopic(null); setDemo(null); }} /></RepositoryProvider>;
+    content = <RepositoryProvider value={demo}><SocialProfileProvider><LibraryScreen key="demo" email="Demo collector" onPreviewShared={setPreviewId} onPreviewTopic={setPreviewTopic} onExitDemo={() => { setPreviewId(null); setPreviewTopic(null); setDemo(null); }} /></SocialProfileProvider></RepositoryProvider>;
   } else if (recovery) {
     content = <RecoveryScreen onDone={finishRecovery} />;
   } else if (session) {

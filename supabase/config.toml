@@ -40,3 +40,7 @@ entrypoint = "./functions/public-safety/index.ts"
 verify_jwt = false
 import_map = "./functions/media/deno.json"
 entrypoint = "./functions/provider-grants/index.ts"
+[functions.member-media]
+verify_jwt = false
+import_map = "./functions/media/deno.json"
+entrypoint = "./functions/member-media/index.ts"
