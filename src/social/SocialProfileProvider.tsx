@@ -7,6 +7,7 @@ import { disabledSocialCapabilities } from './repository';
 import { useRepository } from '../data/RepositoryProvider';
 
 type SocialProfileContextValue = {
+  guest: boolean;
   capabilities: SocialCapabilities;
   profile: OwnSocialProfile | null;
   loading: boolean;
@@ -69,7 +70,7 @@ export function SocialProfileProvider({ children, guest = false }: { children: R
     return next;
   }
 
-  const value: SocialProfileContextValue = { capabilities, profile, loading, error, completeProfileIntro, updateUsername, retry: () => setRetryVersion(value => value + 1) };
+  const value: SocialProfileContextValue = { guest, capabilities, profile, loading, error, completeProfileIntro, updateUsername, retry: () => setRetryVersion(value => value + 1) };
   const setup = profileSetupState(capabilities, profile);
   return <SocialProfileContext.Provider value={value}>{children}{setup === 'intro' && profile ? <ProfileSettings profile={profile} mode="intro" save={completeProfileIntro} onClose={() => undefined} onDone={() => undefined} /> : null}</SocialProfileContext.Provider>;
 }

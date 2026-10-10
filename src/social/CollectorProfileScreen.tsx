@@ -74,7 +74,7 @@ export function CollectorProfileScreen({ publisherId, onClose, onSignIn }: { pub
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 30 }} /> : !error ? <View style={{ alignItems: 'center', padding: 30, gap: 8 }}><UserRound size={38} color={colors.muted} /><Text style={ui.muted}>No shared items to show.</Text></View> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <SharedEntryDetail entry={selected} collector={profile} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onEntryChanged={updateEntry} /> : null}
+    {selected ? <SharedEntryDetail entry={selected} collector={profile} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onEntryChanged={updateEntry} onReported={refresh} /> : null}
     {collectionId ? <Modal visible animationType="slide" onRequestClose={() => setCollectionId(null)}><VisibleCollectionScreen collectionId={collectionId} onClose={() => setCollectionId(null)} /></Modal> : null}
   </SafeAreaView>;
 }

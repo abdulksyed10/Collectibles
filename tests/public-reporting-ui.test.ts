@@ -6,10 +6,11 @@ const controls = readFileSync('src/components/PublicSafetyControls.tsx', 'utf8')
 const library = readFileSync('src/screens/LibraryScreen.tsx', 'utf8');
 const ui = readFileSync('src/components/ui.tsx', 'utf8');
 
-test('public reporting is exposed only after a signed-in session and explains the five-member threshold', () => {
+test('reporting is exposed only after a signed-in session, including shared content, and explains the five-member threshold', () => {
   assert.match(controls, /supabase\.auth\.getSession/);
-  assert.match(controls, /canReport && !showReport/);
-  assert.match(controls, /Sign in to report public content/);
+  assert.match(controls, /canUseSignedInActions && !showReport/);
+  assert.match(controls, /Sign in to report shared content/);
+  assert.match(controls, /sharedPublisherId && !canUseSignedInActions/);
   assert.match(controls, /five different members/);
 });
 

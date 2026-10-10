@@ -2,13 +2,18 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Package } from 'lucide-react-native';
 import { Button, colors, Sheet, ui } from '../components/ui';
+import { PublicSafetyControls } from '../components/PublicSafetyControls';
+import { useRepository } from '../data/RepositoryProvider';
 import { FollowButton } from './FollowButton';
 import { LikeButton } from './LikeButton';
 import { SharedEntryImage } from './SharedEntryImage';
+import { useSocialProfile } from './SocialProfileProvider';
 import type { CollectorProfile, SharedEntry } from './types';
 
-type Props = { entry: SharedEntry; collector: CollectorProfile | null; accessRevision: number; onClose: () => void; onOpenCollection: () => void; showCollectionButton?: boolean; onEntryChanged?: (entry: SharedEntry) => void };
-export function SharedEntryDetail({ entry, collector, accessRevision, onClose, onOpenCollection, showCollectionButton = true, onEntryChanged }: Props) {
+type Props = { entry: SharedEntry; collector: CollectorProfile | null; accessRevision: number; onClose: () => void; onOpenCollection: () => void; showCollectionButton?: boolean; onEntryChanged?: (entry: SharedEntry) => void; onReported?: () => void; onBlocked?: () => void };
+export function SharedEntryDetail({ entry, collector, accessRevision, onClose, onOpenCollection, showCollectionButton = true, onEntryChanged, onReported, onBlocked }: Props) {
+  const repository = useRepository();
+  const social = useSocialProfile();
   const [available, setAvailable] = useState(true);
   const markUnavailable = useCallback(() => setAvailable(false), []);
   useEffect(() => { setAvailable(true); }, [entry.id, accessRevision]);
@@ -20,5 +25,6 @@ export function SharedEntryDetail({ entry, collector, accessRevision, onClose, o
     <LikeButton itemId={entry.id} value={entry.likes} onChanged={likes => onEntryChanged?.({ ...entry, likes })} />
     {collector ? <FollowButton collector={collector} /> : null}
     {showCollectionButton ? <Button title="View full collection" secondary onPress={onOpenCollection} /> : null}
+    <PublicSafetyControls repository={repository} collectionId={entry.collectionId} itemId={entry.id} itemLabel="this shared entry" sharedPublisherId={entry.publisherId} signedIn={!social.guest} isOwnContent={social.profile?.publisherId === entry.publisherId} onReported={onReported} onBlocked={onBlocked ?? onClose} />
   </Sheet>;
 }

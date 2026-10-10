@@ -6,6 +6,7 @@ import type { CollectionRepository } from '../domain/models';
 import { PolicyLinks } from './PolicyLinks';
 import { Button, colors, ErrorMessage, fonts, messageOf, ui } from './ui';
 import { supabase } from '../lib/supabase';
+import { blockSharedCollector, reportSharedContent } from '../social/moderation';
 
 const reasons: Array<{ value: PublicReportReason; label: string }> = [
   { value: 'spam', label: 'Spam or misleading' },
@@ -24,6 +25,11 @@ export function PublicSafetyControls({
   itemId,
   itemLabel,
   demo = false,
+  /** A social publisher enables signed-in safety actions for Friends-only content. */
+  sharedPublisherId,
+  signedIn,
+  isOwnContent = false,
+  onReported,
   onBlocked,
 }: {
   repository: CollectionRepository;
@@ -31,6 +37,10 @@ export function PublicSafetyControls({
   itemId?: string;
   itemLabel: string;
   demo?: boolean;
+  sharedPublisherId?: string;
+  signedIn?: boolean;
+  isOwnContent?: boolean;
+  onReported?: () => void;
   onBlocked?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -45,19 +55,27 @@ export function PublicSafetyControls({
 
   useEffect(() => {
     let active = true;
+    if (signedIn !== undefined) {
+      setCanReport(signedIn);
+      return () => { active = false; };
+    }
     if (!supabase) return () => { active = false; };
     void supabase.auth.getSession().then(({ data }) => { if (active) setCanReport(Boolean(data.session)); }).catch(() => { if (active) setCanReport(false); });
     return () => { active = false; };
-  }, []);
+  }, [signedIn]);
 
-  if (demo) return null;
+  const canUseSignedInActions = signedIn ?? canReport;
+  // Public visitors retain their device-local blocks. Friends-only content is
+  // never available to visitors, so its safety actions must be authenticated.
+  if (demo || isOwnContent || (sharedPublisherId && !canUseSignedInActions)) return null;
 
   async function report() {
     setBusy(true); setError(''); setMessage('');
     try {
-      await repository.reportPublicContent(itemId ? { itemId, reason, details } : { collectionId, reason, details });
-      setMessage('Report recorded. Public content is reviewed after reports from five different members.');
+      await reportSharedContent(repository, itemId ? { itemId, reason, details } : { collectionId, reason, details });
+      setMessage('Report received. Shared content is reviewed after reports from five different members.');
       setShowReport(false); setDetails('');
+      onReported?.();
     } catch (cause) { setError(messageOf(cause)); }
     finally { setBusy(false); }
   }
@@ -65,9 +83,13 @@ export function PublicSafetyControls({
   async function block() {
     setBusy(true); setError(''); setMessage('');
     try {
-      const blocked = await repository.blockPublicCollection(collectionId);
-      if (!blocked) throw new Error('This collection is no longer available.');
-      setMessage('Collector blocked. Their shared entries are now hidden from your Explore view.');
+      if (sharedPublisherId) {
+        await blockSharedCollector(repository, sharedPublisherId);
+      } else {
+        const blocked = await repository.blockPublicCollection(collectionId);
+        if (!blocked) throw new Error('This collection is no longer available.');
+      }
+      setMessage('Collector blocked. Their shared entries are now hidden for you.');
       setBlockConfirm(false);
       onBlocked?.();
     } catch (cause) { setError(messageOf(cause)); }
@@ -78,9 +100,9 @@ export function PublicSafetyControls({
   return <View style={{ gap: 10, paddingTop: 4 }}>
     {message ? <Text accessibilityLiveRegion="polite" style={[ui.muted, { fontSize: 12 }]}>{message}</Text> : null}
     <ErrorMessage message={error} />
-    {canReport && !showReport ? <Button title={itemId ? 'Report entry' : 'Report collection'} secondary icon={Flag} onPress={() => { setShowReport(true); setError(''); }} disabled={busy} /> : null}
-    {!canReport ? <Text style={[ui.muted, { fontSize: 12 }]}>Sign in to report public content.</Text> : null}
-    {canReport && showReport ? <View style={{ gap: 10, padding: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.pale }}>
+    {canUseSignedInActions && !showReport ? <Button title={itemId ? 'Report entry' : 'Report collection'} secondary icon={Flag} onPress={() => { setShowReport(true); setError(''); }} disabled={busy} /> : null}
+    {!canUseSignedInActions ? <Text style={[ui.muted, { fontSize: 12 }]}>Sign in to report shared content.</Text> : null}
+    {canUseSignedInActions && showReport ? <View style={{ gap: 10, padding: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.pale }}>
       <Text style={[ui.text, { fontFamily: fonts.bold }]}>Report {itemLabel}</Text>
       <Text style={[ui.muted, { fontSize: 12 }]}>Choose the reason that best fits. Please do not include private information.</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
@@ -89,7 +111,7 @@ export function PublicSafetyControls({
       <TextInput accessibilityLabel="Optional report details" value={details} onChangeText={setDetails} editable={!busy} multiline maxLength={1000} placeholder="Optional details" placeholderTextColor={colors.muted} style={{ minHeight: 76, borderWidth: 1, borderColor: colors.line, borderRadius: 10, backgroundColor: colors.card, padding: 10, color: colors.ink, fontFamily: fonts.body, textAlignVertical: 'top' }} />
       <View style={ui.row}><Button title="Cancel" secondary onPress={() => setShowReport(false)} disabled={busy} style={{ flex: 1 }} /><Button title="Send report" icon={Flag} onPress={() => { void report(); }} loading={busy} style={{ flex: 1 }} /></View>
     </View> : null}
-    {!blockConfirm ? <Button title="Block collector" secondary danger icon={Ban} onPress={() => { setBlockConfirm(true); setError(''); }} disabled={busy} /> : <View style={{ gap: 9, padding: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 14 }}><Text style={ui.text}>Hide this collector’s current and future shared entries from your Explore view?</Text><View style={ui.row}><Button title="Cancel" secondary onPress={() => setBlockConfirm(false)} disabled={busy} style={{ flex: 1 }} /><Button title="Block collector" danger icon={Ban} onPress={() => { void block(); }} loading={busy} style={{ flex: 1 }} /></View></View>}
-    <Text style={[ui.muted, {fontSize:12}]}>Guest blocks are saved on this device. Signed-in blocks apply to your account.</Text><PolicyLinks /><Button title="Close actions" secondary onPress={() => setExpanded(false)} />
+    {!blockConfirm ? <Button title="Block collector" secondary danger icon={Ban} onPress={() => { setBlockConfirm(true); setError(''); }} disabled={busy} /> : <View style={{ gap: 9, padding: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 14 }}><Text style={ui.text}>{sharedPublisherId ? 'Hide this collector’s current and future shared entries from your views?' : 'Hide this collector’s current and future shared entries from your Explore view?'}</Text><View style={ui.row}><Button title="Cancel" secondary onPress={() => setBlockConfirm(false)} disabled={busy} style={{ flex: 1 }} /><Button title="Block collector" danger icon={Ban} onPress={() => { void block(); }} loading={busy} style={{ flex: 1 }} /></View></View>}
+    <Text style={[ui.muted, {fontSize:12}]}>{sharedPublisherId ? 'Blocking hides this collector’s shared entries for you and removes any follow relationship.' : 'Guest blocks are saved on this device. Signed-in blocks apply to your account.'}</Text><PolicyLinks /><Button title="Close actions" secondary onPress={() => setExpanded(false)} />
   </View>;
 }

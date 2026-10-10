@@ -45,6 +45,6 @@ export function SharedEntryScreen({ itemId, onClose, onSignIn }: { itemId: strin
     <View style={[ui.row, { minHeight: 60, paddingHorizontal: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onClose} /><Brand small />{onSignIn ? <Button title="Sign in" secondary onPress={onSignIn} /> : null}</View>
     {loading ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}><ActivityIndicator color={colors.green} /><Text style={ui.muted}>Opening shared entry…</Text></View> : null}
     {!loading && error ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}><ErrorMessage message={error} /><Button title="Try again" secondary onPress={refresh} /><Button title="Back to Collectibles" secondary onPress={onClose} /></View> : null}
-    {entry ? <SharedEntryDetail entry={entry} collector={collector} accessRevision={revision} onClose={onClose} onOpenCollection={() => setCollectionId(entry.collectionId)} onEntryChanged={setEntry} /> : null}
+    {entry ? <SharedEntryDetail entry={entry} collector={collector} accessRevision={revision} onClose={onClose} onOpenCollection={() => setCollectionId(entry.collectionId)} onEntryChanged={setEntry} onReported={refresh} /> : null}
   </SafeAreaView>;
 }
