@@ -22,7 +22,7 @@ export function validateCategorySettings(value: Pick<CategoryDraft, 'description
 export function validateItemSettings(value: Pick<ItemDraft, 'visibility' | 'categoryId' | 'acquiredOn'>) {
   const settings: { visibility?: ItemVisibility; category_id?: string | null; acquired_on?: string | null } = {};
   if (value.visibility !== undefined) {
-    if (value.visibility !== 'private' && value.visibility !== 'public') throw new Error('Choose Private or Public.');
+    if (value.visibility !== 'private' && value.visibility !== 'friends' && value.visibility !== 'public') throw new Error('Choose Private, Friends only, or Public.');
     settings.visibility = value.visibility;
   }
   if (value.categoryId !== undefined) settings.category_id = value.categoryId;

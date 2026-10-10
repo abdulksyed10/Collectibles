@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Camera, Check, ImagePlus, Plus, Trash2 } from 'lucide-react-native';
 import { Image } from 'expo-image';
-import type { Category, Collection, Item, ItemImage, PreparedPhoto } from '../domain/models';
+import type { Category, Collection, Item, ItemImage, ItemVisibility, PreparedPhoto } from '../domain/models';
 import { useRepository } from '../data/RepositoryProvider';
 import { pickPhoto } from '../lib/photos';
 import { validateAcquiredDate } from '../domain/dates';
@@ -79,7 +79,7 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
   const [newCollectionName, setNewCollectionName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [visibility, setVisibility] = useState<'private' | 'public'>(item?.visibility ?? 'private');
+  const [visibility, setVisibility] = useState<ItemVisibility>(item?.visibility ?? 'private');
   const [acquiredOn, setAcquiredOn] = useState<string | null>(initialItemAcquiredOn(item));
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null); const [savedId, setSavedId] = useState(item?.id);
   const [busy, setBusy] = useState(false); const [picking, setPicking] = useState(false); const [error, setError] = useState('');
@@ -149,8 +149,8 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     <Choices label="Category" options={categoryOptions} value={creatingCategory ? '__new_category__' : categoryId} onChange={chooseCategory} disabled={busy} />
     {creatingCategory ? <Field label="New category name" placeholder="e.g. National parks" value={newCategoryName} onChangeText={setNewCategoryName} maxLength={80} editable={!busy} /> : null}
     <AcquiredDateField value={acquiredOn} onChange={setAcquiredOn} disabled={busy} />
-    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, { id: 'public', name: 'Public' }]} value={visibility} onChange={value => { setVisibility(value as 'private' | 'public'); }} disabled={busy} />
-    <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'This item will be reviewed before it appears in Explore. Notes stay private.' : 'Only you can view this item.'}</Text>
+    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, { id: 'public', name: 'Public' }]} value={visibility} onChange={value => { setVisibility(value as ItemVisibility); }} disabled={busy} />
+    <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'This item will be reviewed before it appears in Explore. Notes stay private.' : visibility === 'friends' ? 'Only mutual follows can view this item. Notes stay private.' : 'Only you can view this item.'}</Text>
     <Field label="Notes (optional)" placeholder="Item notes" value={notes} onChangeText={setNotes} maxLength={2000} multiline editable={!busy} />
     {policy.element}<ErrorMessage message={error} /><Button title={item || savedId ? 'Save item' : 'Add item'} icon={Check} onPress={() => { void save(); }} loading={busy} disabled={picking} />
   </Sheet>;

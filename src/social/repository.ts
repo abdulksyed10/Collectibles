@@ -1,7 +1,7 @@
 import { requireClient } from '../lib/supabase';
 import { invalidateSocial } from './events';
 import { socialProfileErrorMessage } from './messages';
-import type { CollectorProfile, CursorPage, LikeState, OwnSocialProfile, PeopleList, Relationship, SharedEntry, SocialCapabilities, SocialRepository, VisibleCollection } from './types';
+import type { CollectorIdentity, CollectorProfile, CursorPage, LikeState, OwnSocialProfile, PeopleList, Relationship, SharedEntry, SocialCapabilities, SocialRepository, VisibleCollection } from './types';
 
 export const disabledSocialCapabilities: SocialCapabilities = {
   profilesEnabled: false,
@@ -16,7 +16,7 @@ function unavailable(): never { throw new Error('This social feature is not avai
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 function socialActionMessage(error: { code?: unknown; message?: unknown }, fallback: string) {
   if (error.code === '42901') return 'You have reached a limit. Please try again later.';
-  if (error.code === '42501') return typeof error.message === 'string' && /follow|block|sign in|available/i.test(error.message) ? error.message : 'This action is unavailable.';
+  if (error.code === '42501') return typeof error.message === 'string' && /follow|block|sign in|available|following/i.test(error.message) ? error.message : 'This action is unavailable.';
   if (error.code === '22023') return typeof error.message === 'string' && error.message.length <= 120 ? error.message : fallback;
   return fallback;
 }
@@ -37,13 +37,18 @@ function readRelationship(value: unknown): Relationship {
   if (!isRecord(value) || typeof value.isFollowing !== 'boolean' || typeof value.isFollower !== 'boolean' || typeof value.isFriend !== 'boolean' || typeof value.blockedByMe !== 'boolean' || typeof value.interactionAllowed !== 'boolean') throw new Error('Unable to load collector details. Try again.');
   return { isFollowing: value.isFollowing, isFollower: value.isFollower, isFriend: value.isFriend, blockedByMe: value.blockedByMe, interactionAllowed: value.interactionAllowed };
 }
+function readIdentity(value: unknown): CollectorIdentity {
+  if (!isRecord(value) || typeof value.publisherId !== 'string' || !UUID.test(value.publisherId) || (value.username !== null && typeof value.username !== 'string')) throw new Error('Unable to load shared entry. Try again.');
+  return { publisherId: value.publisherId, username: value.username as string | null };
+}
 function readProfile(value: unknown): OwnSocialProfile {
   if (!isRecord(value) || typeof value.publisherId !== 'string' || !UUID.test(value.publisherId) || typeof value.username !== 'string' || (value.introCompletedAt !== null && typeof value.introCompletedAt !== 'string')) throw new Error('Unable to load your profile. Try again.');
   return { publisherId: value.publisherId, username: value.username, introCompletedAt: value.introCompletedAt as string | null };
 }
 function readCollector(value: unknown): CollectorProfile {
-  if (!isRecord(value) || typeof value.publisherId !== 'string' || !UUID.test(value.publisherId) || (value.username !== null && typeof value.username !== 'string')) throw new Error('Unable to load collector details. Try again.');
-  return { publisherId: value.publisherId, username: value.username as string | null, relationship: readRelationship(value.relationship) };
+  const identity = readIdentity(value);
+  if (!isRecord(value)) throw new Error('Unable to load collector details. Try again.');
+  return { ...identity, relationship: readRelationship(value.relationship) };
 }
 function readCursor(cursor?: string) {
   if (!cursor) return null;
@@ -54,9 +59,48 @@ function readCursor(cursor?: string) {
     return value;
   } catch { throw new Error('Invalid page.'); }
 }
+function cursorFrom(value: unknown) {
+  return value === null ? null : isRecord(value) ? JSON.stringify(value) : (() => { throw new Error('Unable to load shared entries. Try again.'); })();
+}
 function readCollectorPage(value: unknown): CursorPage<CollectorProfile> {
-  if (!isRecord(value) || !Array.isArray(value.items) || (value.nextCursor !== null && !isRecord(value.nextCursor))) throw new Error('Unable to load collectors. Try again.');
-  return { items: value.items.map(readCollector), nextCursor: value.nextCursor ? JSON.stringify(value.nextCursor) : null };
+  if (!isRecord(value) || !Array.isArray(value.items)) throw new Error('Unable to load collectors. Try again.');
+  return { items: value.items.map(readCollector), nextCursor: cursorFrom(value.nextCursor) };
+}
+function readLikeState(value: unknown): LikeState {
+  if (!isRecord(value) || typeof value.count !== 'number' || !Number.isSafeInteger(value.count) || value.count < 0 || typeof value.likedByMe !== 'boolean') throw new Error('Unable to load shared entry. Try again.');
+  return { count: value.count, likedByMe: value.likedByMe };
+}
+function readSharedEntry(value: unknown): SharedEntry {
+  if (!isRecord(value) || typeof value.id !== 'string' || !UUID.test(value.id) || typeof value.title !== 'string' || typeof value.hasPhoto !== 'boolean' || typeof value.collectionId !== 'string' || !UUID.test(value.collectionId) || typeof value.collectionName !== 'string' || typeof value.publisherId !== 'string' || !UUID.test(value.publisherId) || typeof value.createdAt !== 'string' || (value.audience !== 'public' && value.audience !== 'friends')) throw new Error('Unable to load shared entry. Try again.');
+  const creator = readIdentity(value.creator);
+  if (creator.publisherId !== value.publisherId) throw new Error('Unable to load shared entry. Try again.');
+  return {
+    id: value.id,
+    title: value.title,
+    hasPhoto: value.hasPhoto,
+    collectionId: value.collectionId,
+    collectionName: value.collectionName,
+    publisherId: value.publisherId,
+    creator,
+    createdAt: value.createdAt,
+    audience: value.audience,
+    relationship: readRelationship(value.relationship),
+    likes: readLikeState(value.likes),
+  };
+}
+function readSharedPage(value: unknown): CursorPage<SharedEntry> {
+  if (!isRecord(value) || !Array.isArray(value.items)) throw new Error('Unable to load shared entries. Try again.');
+  return { items: value.items.map(readSharedEntry), nextCursor: cursorFrom(value.nextCursor) };
+}
+function readVisibleCollection(value: unknown): VisibleCollection {
+  if (!isRecord(value) || !isRecord(value.collection) || typeof value.collection.id !== 'string' || !UUID.test(value.collection.id) || typeof value.collection.name !== 'string') throw new Error('Unable to load this collection. Try again.');
+  const count = value.visibleItemCount;
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1) throw new Error('Unable to load this collection. Try again.');
+  return {
+    collection: { id: value.collection.id, name: value.collection.name, creator: readIdentity(value.collection.creator) },
+    entries: readSharedPage(value.entries),
+    visibleItemCount: count,
+  };
 }
 
 async function profileRpc(name: 'ensure_social_profile' | 'complete_profile_intro' | 'update_username', args: Record<string, unknown> = {}) {
@@ -109,10 +153,26 @@ export const socialRepository: SocialRepository = {
     if (error) throw new Error(socialActionMessage(error, 'Unable to block this collector. Try again.'));
     invalidateSocial('relationship');
   },
-  async listFollowingEntries(_cursor, _friendsOnly): Promise<CursorPage<SharedEntry>> { return unavailable(); },
-  async listCollectorEntries(_publisherId, _cursor): Promise<CursorPage<SharedEntry>> { return unavailable(); },
-  async readVisibleCollection(_collectionId, _cursor): Promise<VisibleCollection | null> { return unavailable(); },
-  async readSharedEntry(_itemId): Promise<SharedEntry | null> { return unavailable(); },
+  async listFollowingEntries(cursor, friendsOnly = false) {
+    const { data, error } = await requireClient().rpc('list_following_entries', { p_cursor: readCursor(cursor), p_friends_only: friendsOnly });
+    if (error) throw new Error(socialActionMessage(error, 'Unable to load Following. Try again.'));
+    return readSharedPage(data);
+  },
+  async listCollectorEntries(publisherId, cursor) {
+    const { data, error } = await requireClient().rpc('list_collector_entries', { p_publisher_id: requireId(publisherId), p_cursor: readCursor(cursor) });
+    if (error) throw new Error(socialActionMessage(error, 'Unable to load shared entries. Try again.'));
+    return readSharedPage(data);
+  },
+  async readVisibleCollection(collectionId, cursor) {
+    const { data, error } = await requireClient().rpc('get_visible_collection', { p_collection_id: requireId(collectionId, 'Collection unavailable.'), p_cursor: readCursor(cursor) });
+    if (error) throw new Error(socialActionMessage(error, 'Unable to load this collection. Try again.'));
+    return data === null ? null : readVisibleCollection(data);
+  },
+  async readSharedEntry(itemId) {
+    const { data, error } = await requireClient().rpc('get_shared_entry', { p_item_id: requireId(itemId, 'Entry unavailable.') });
+    if (error) throw new Error(socialActionMessage(error, 'Unable to load this entry. Try again.'));
+    return data === null ? null : readSharedEntry(data);
+  },
   async setItemLiked(_itemId, _liked): Promise<void> { return unavailable(); },
   async getEntrySocialState(_itemIds): Promise<Record<string, LikeState>> { return unavailable(); },
 };

@@ -1,6 +1,6 @@
 import type { SocialRepository } from '../social/types';
 
-export type ItemVisibility = 'private' | 'public';
+export type ItemVisibility = 'private' | 'friends' | 'public';
 export type PublicationStatus = 'private' | 'published' | 'review' | 'removed';
 
 export type Collection = {
