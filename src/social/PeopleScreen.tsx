@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Ban, Search, UserMinus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,15 +21,22 @@ export function PeopleScreen({ onClose }: { onClose: () => void }) {
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const requestRef = useRef(0);
   const tab = tabs.find(value => value.id === kind)!;
 
   const load = useCallback(async () => {
+    const request = ++requestRef.current;
     setLoading(true); setError(''); setSearching(false);
-    try { setPeople((await repository.listPeople(kind)).items); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load collectors. Try again.'); }
-    finally { setLoading(false); }
+    try {
+      const page = await repository.listPeople(kind);
+      if (request !== requestRef.current) return;
+      setPeople(page.items); setCursor(page.nextCursor);
+    } catch (reason) { if (request === requestRef.current) setError(reason instanceof Error ? reason.message : 'Unable to load collectors. Try again.'); }
+    finally { if (request === requestRef.current) setLoading(false); }
   }, [kind, repository]);
 
   useEffect(() => { void load(); }, [load]);
@@ -37,10 +44,29 @@ export function PeopleScreen({ onClose }: { onClose: () => void }) {
   async function findPeople() {
     const query = search.trim();
     if (query.length < 2) { setError('Enter at least two characters.'); return; }
+    const request = ++requestRef.current;
     setLoading(true); setError(''); setSearching(true);
-    try { setPeople((await repository.searchCollectors(query)).items); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to find collectors. Try again.'); }
-    finally { setLoading(false); }
+    try {
+      const page = await repository.searchCollectors(query);
+      if (request !== requestRef.current) return;
+      setPeople(page.items); setCursor(page.nextCursor);
+    } catch (reason) { if (request === requestRef.current) setError(reason instanceof Error ? reason.message : 'Unable to find collectors. Try again.'); }
+    finally { if (request === requestRef.current) setLoading(false); }
+  }
+  async function loadMore() {
+    if (!cursor || moreLoading || loading) return;
+    const request = requestRef.current;
+    setMoreLoading(true); setError('');
+    try {
+      const page = searching ? await repository.searchCollectors(search.trim(), cursor) : await repository.listPeople(kind, cursor);
+      if (request !== requestRef.current) return;
+      setPeople(current => {
+        const seen = new Set(current.map(person => person.publisherId));
+        return [...current, ...page.items.filter(person => !seen.has(person.publisherId))];
+      });
+      setCursor(page.nextCursor);
+    } catch (reason) { if (request === requestRef.current) setError(reason instanceof Error ? reason.message : 'Unable to load more collectors. Try again.'); }
+    finally { if (request === requestRef.current) setMoreLoading(false); }
   }
   function updateRelationship(publisherId: string, relationship: Relationship) {
     setPeople(current => current.map(person => person.publisherId === publisherId ? { ...person, relationship } : person));
@@ -64,7 +90,7 @@ export function PeopleScreen({ onClose }: { onClose: () => void }) {
     finally { setBusyId(''); }
   }
 
-  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><View style={[ui.row, { minHeight: 60, paddingHorizontal: 16, borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}><Button title="Back" secondary icon={ArrowLeft} onPress={onClose} /></View><View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 16 }}><FlatList data={people} keyExtractor={person => person.publisherId} contentContainerStyle={{ paddingVertical: 22, gap: 12, flexGrow: 1 }} ListHeaderComponent={<View style={{ gap: 16, marginBottom: 8 }}><Text style={[ui.title, { fontSize: 36, lineHeight: 40 }]}>Collectors</Text><Text style={ui.muted}>Find people you know, manage who you follow, and see your mutual friends.</Text><View style={[ui.row, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingLeft: 14, minHeight: 48 }]}><Search size={18} color={colors.muted} /><TextInput accessibilityLabel="Find collectors" autoCapitalize="none" autoCorrect={false} value={search} onChangeText={setSearch} placeholder="Search usernames" placeholderTextColor="#9AA49C" onSubmitEditing={() => { void findPeople(); }} style={{ flex: 1, minWidth: 0, color: colors.ink, fontFamily: fonts.body, paddingVertical: 12 }} /><Button title="Find" secondary onPress={() => { void findPeople(); }} disabled={loading} /></View><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{tabs.map(option => <Pressable key={option.id} accessibilityRole="button" accessibilityState={{ selected: kind === option.id }} onPress={() => { setKind(option.id); setSearch(''); }} style={{ minHeight: 44, paddingHorizontal: 13, justifyContent: 'center', borderRadius: 22, backgroundColor: kind === option.id ? colors.green : colors.card, borderWidth: 1, borderColor: kind === option.id ? colors.green : colors.line }}><Text style={{ color: kind === option.id ? '#FFFFFF' : colors.ink, fontFamily: fonts.bold, fontSize: 13 }}>{option.title}</Text></Pressable>)}</View><ErrorMessage message={error} />{searching ? <Button title={`Back to ${tab.title}`} secondary onPress={() => { setSearch(''); void load(); }} /> : null}</View>} renderItem={({ item }) => <CollectorRow collector={item} tab={searching ? undefined : kind} busy={busyId === item.publisherId} onChanged={relationship => updateRelationship(item.publisherId, relationship)} onRemoveFollower={() => { void removeFollower(item); }} onBlock={() => { void block(item); }} onUnblock={() => { void unblock(item); }} />} ListEmptyComponent={loading ? <View style={{ padding: 34, alignItems: 'center', gap: 10 }}><ActivityIndicator color={colors.green} /><Text style={ui.muted}>Loading collectors…</Text></View> : <View style={{ paddingVertical: 34, alignItems: 'center', gap: 10 }}><Text style={[ui.text, { fontFamily: fonts.bold }]}>{searching ? 'No collectors found' : `No ${tab.title.toLowerCase()} yet`}</Text><Text style={[ui.muted, { textAlign: 'center', maxWidth: 360 }]}>{searching ? 'Try another username.' : tab.empty}</Text></View>} /></View></SafeAreaView>;
+  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><View style={[ui.row, { minHeight: 60, paddingHorizontal: 16, borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}><Button title="Back" secondary icon={ArrowLeft} onPress={onClose} /></View><View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 16 }}><FlatList data={people} keyExtractor={person => person.publisherId} contentContainerStyle={{ paddingVertical: 22, gap: 12, flexGrow: 1 }} ListHeaderComponent={<View style={{ gap: 16, marginBottom: 8 }}><Text style={[ui.title, { fontSize: 36, lineHeight: 40 }]}>Collectors</Text><Text style={ui.muted}>Find people you know, manage who you follow, and see your mutual friends.</Text><View style={[ui.row, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingLeft: 14, minHeight: 48 }]}><Search size={18} color={colors.muted} /><TextInput accessibilityLabel="Find collectors" autoCapitalize="none" autoCorrect={false} value={search} onChangeText={setSearch} placeholder="Search usernames" placeholderTextColor="#9AA49C" onSubmitEditing={() => { void findPeople(); }} style={{ flex: 1, minWidth: 0, color: colors.ink, fontFamily: fonts.body, paddingVertical: 12 }} /><Button title="Find" secondary onPress={() => { void findPeople(); }} disabled={loading} /></View><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{tabs.map(option => <Pressable key={option.id} accessibilityRole="button" accessibilityState={{ selected: kind === option.id }} onPress={() => { setKind(option.id); setSearch(''); }} style={{ minHeight: 44, paddingHorizontal: 13, justifyContent: 'center', borderRadius: 22, backgroundColor: kind === option.id ? colors.green : colors.card, borderWidth: 1, borderColor: kind === option.id ? colors.green : colors.line }}><Text style={{ color: kind === option.id ? '#FFFFFF' : colors.ink, fontFamily: fonts.bold, fontSize: 13 }}>{option.title}</Text></Pressable>)}</View><ErrorMessage message={error} />{searching ? <Button title={`Back to ${tab.title}`} secondary onPress={() => { setSearch(''); void load(); }} /> : null}</View>} renderItem={({ item }) => <CollectorRow collector={item} tab={searching ? undefined : kind} busy={busyId === item.publisherId} onChanged={relationship => updateRelationship(item.publisherId, relationship)} onRemoveFollower={() => { void removeFollower(item); }} onBlock={() => { void block(item); }} onUnblock={() => { void unblock(item); }} />} ListEmptyComponent={loading ? <View style={{ padding: 34, alignItems: 'center', gap: 10 }}><ActivityIndicator color={colors.green} /><Text style={ui.muted}>Loading collectors…</Text></View> : <View style={{ paddingVertical: 34, alignItems: 'center', gap: 10 }}><Text style={[ui.text, { fontFamily: fonts.bold }]}>{searching ? 'No collectors found' : `No ${tab.title.toLowerCase()} yet`}</Text><Text style={[ui.muted, { textAlign: 'center', maxWidth: 360 }]}>{searching ? 'Try another username.' : tab.empty}</Text></View>} ListFooterComponent={cursor ? <Button title="Load more collectors" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ marginVertical: 8 }} /> : null} /></View></SafeAreaView>;
 }
 
 function CollectorRow({ collector, tab, busy, onChanged, onRemoveFollower, onBlock, onUnblock }: { collector: CollectorProfile; tab?: PeopleList; busy: boolean; onChanged: (relationship: Relationship) => void; onRemoveFollower: () => void; onBlock: () => void; onUnblock: () => void }) {

@@ -6,7 +6,7 @@ import type { SharedEntry } from './types';
 import { SharedEntryImage } from './SharedEntryImage';
 import { LikeButton } from './LikeButton';
 
-type Props = { entry: SharedEntry; accessRevision: number; onOpen: () => void; onOpenCollector: () => void; onLikeChanged?: (entry: SharedEntry) => void };
+type Props = { entry: SharedEntry; accessRevision: number; onOpen: () => void; onOpenCollector?: () => void; onLikeChanged?: (entry: SharedEntry) => void };
 export function SharedEntryCard({ entry, accessRevision, onOpen, onOpenCollector, onLikeChanged }: Props) {
   return <View style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 16, backgroundColor: colors.card, overflow: 'hidden' }}>
     <Pressable accessibilityRole="button" accessibilityLabel={`View ${entry.title}`} onPress={onOpen} style={({ pressed }) => ({ opacity: pressed ? 0.84 : 1 })}>
@@ -16,7 +16,7 @@ export function SharedEntryCard({ entry, accessRevision, onOpen, onOpenCollector
       <View style={{ padding: 12, gap: 4 }}><Text numberOfLines={2} style={{ color: colors.ink, fontFamily: fonts.bold }}>{entry.title}</Text><Text numberOfLines={1} style={[ui.muted, { fontSize: 12 }]}>{entry.collectionName}</Text></View>
     </Pressable>
     <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 9 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`View ${entry.creator.username ?? 'collector'}`} onPress={onOpenCollector} hitSlop={6}><Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 12 }}>@{entry.creator.username ?? 'collector'} · {entry.audience === 'friends' ? 'Friends only' : 'Public'}</Text></Pressable>
+      {onOpenCollector ? <Pressable accessibilityRole="button" accessibilityLabel={`View ${entry.creator.username ?? 'collector'}`} onPress={onOpenCollector} hitSlop={6}><Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 12 }}>@{entry.creator.username ?? 'collector'} · {entry.audience === 'friends' ? 'Friends only' : 'Public'}</Text></Pressable> : <Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 12 }}>@{entry.creator.username ?? 'collector'} · {entry.audience === 'friends' ? 'Friends only' : 'Public'}</Text>}
       <LikeButton itemId={entry.id} value={entry.likes} onChanged={likes => onLikeChanged?.({ ...entry, likes })} />
     </View>
   </View>;
