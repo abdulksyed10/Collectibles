@@ -1,6 +1,12 @@
-# Deployment checkpoint — updated October 4, 2026
+# Deployment checkpoint — updated October 10, 2026
 
-## Current release repair and rollout boundary
+## Current social release: hold for review fixes
+
+Continue on `codex/social-review`. See [the prioritized review handoff](superpowers/plans/2026-10-10-social-release-review.md) for confirmed security/functionality blockers, targeted local fixes, verification evidence, and deployment steps. The social release has **not** been pushed to main or deployed by this review. The live social-capabilities API returned HTTP 404 on October 10. Do not treat older release notes below as verification of the new social features.
+
+The owner requested larger fixes be left as a plan for a smaller model. Complete those fixes and acceptance checks before releasing. Existing production data and services were not modified.
+
+## October 4 release repair and rollout boundary (historical)
 
 - The Vercel build at `f373734` failed because release validation required `EXPO_PUBLIC_WEB_URL` even though web authentication already supports the browser-origin fallback. The repair allows an omitted/blank web override and still requires a public HTTPS origin for native releases.
 - Native checks also found an obsolete splash configuration and dynamic-config inheritance issue. Both are repaired, with Expo Doctor added to CI. The undeployed account-deletion stage migration now converts existing pending jobs and sets a valid default before enforcing its new constraint.

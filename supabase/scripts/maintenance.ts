@@ -16,6 +16,7 @@ const remove=createAccountDeletion(db,{
 const media=createMediaService(db,createR2Store({accountId:required('R2_ACCOUNT_ID'),bucket:required('R2_BUCKET_NAME'),accessKeyId:required('R2_ACCESS_KEY_ID'),secretAccessKey:required('R2_SECRET_ACCESS_KEY')}),remove);
 try {
   await db.query('SELECT private.purge_safety_records()');
+  await db.query('SELECT private.purge_social_counters()');
   await db.query("DELETE FROM private.signup_admission_events WHERE created_at<now()-interval '2 days'");
   await db.query("DELETE FROM private.provider_registration_attempts WHERE created_at<now()-interval '2 days'");
   await db.query("DELETE FROM private.account_deletion_jobs WHERE status='complete' AND updated_at<now()-interval '30 days'");
