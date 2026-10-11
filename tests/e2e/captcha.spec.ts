@@ -11,9 +11,10 @@ test('standalone CAPTCHA never sends a token after expiry', async ({ page }) => 
       postMessage: value => (window as typeof window & { captchaMessages: unknown[] }).captchaMessages.push(JSON.parse(value)),
     };
   });
-  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', route => route.fulfill({ contentType: 'text/javascript', body: `window.turnstile={render:function(_target,options){window.captchaOptions=options;return 'widget';}};` }));
+  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', route => route.fulfill({ contentType: 'text/javascript', body: `window.turnstile={render:function(_target,options){window.captchaOptions=options;return 'widget';},execute:function(){}};` }));
   await page.goto(`/auth/captcha.html?siteKey=test-site-key&nonce=${nonce}&theme=light`);
   await expect.poll(() => page.evaluate(() => (window as typeof window & { captchaMessages: unknown[] }).captchaMessages)).toContainEqual({ type: 'ready', nonce });
+  await page.evaluate(value => window.postMessage(JSON.stringify({ type: 'execute', nonce: value }), window.location.origin), nonce);
   await page.evaluate(value => (window as typeof window & { captchaOptions: { callback: (token: string) => void; 'expired-callback': () => void } }).captchaOptions['expired-callback'](), token);
   await page.evaluate(value => (window as typeof window & { captchaOptions: { callback: (token: string) => void } }).captchaOptions.callback(value), token);
   await expect.poll(() => page.evaluate(() => (window as typeof window & { captchaMessages: Array<{ type: string }> }).captchaMessages.map(message => message.type))).toEqual(['ready', 'expired']);

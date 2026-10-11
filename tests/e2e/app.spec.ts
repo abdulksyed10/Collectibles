@@ -7,7 +7,14 @@ const user = { id: owner, aud: 'authenticated', role: 'authenticated', email: 'c
 const access = [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from(JSON.stringify({ sub: owner, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url'), 'test-signature'].join('.');
 
 async function fakeBackend(page: Page) {
-  await page.addInitScript(() => { (window as any).turnstile={render:(_target:unknown,options:any)=>{queueMicrotask(()=>options.callback('fixture-captcha-token-that-is-long-enough'));return 'fixture';},remove:()=>{}}; });
+  await page.addInitScript(() => {
+    let callback: (token: string) => void;
+    (window as any).turnstile = {
+      render: (_target: unknown, options: any) => { callback = options.callback; return 'fixture'; },
+      execute: () => queueMicrotask(() => callback('fixture-captcha-token-that-is-long-enough')),
+      reset: () => {}, remove: () => {},
+    };
+  });
   let accepted=false;
   let collections: any[] = [];
   let categories: any[] = [];
@@ -31,6 +38,8 @@ async function fakeBackend(page: Page) {
   });
   await page.route('**/rest/v1/**', async route => {
     const request = route.request(); const url = new URL(request.url()); const resource = url.pathname.split('/').at(-1)!;
+    if (resource === 'get_social_capabilities') { await route.fulfill({ json: { profilesEnabled: false, socialWritesEnabled: false, friendsSharingEnabled: false, likesEnabled: false } }); return; }
+    if (resource === 'get_admin_context') { await route.fulfill({ json: { isAdmin: false } }); return; }
     if(resource==='get_policy_acceptance') { await route.fulfill({json:{requiredVersion:'2026-10-04',acceptedVersion:accepted?'2026-10-04':null}});return; }
     if(resource==='accept_public_rules') {accepted=true;await route.fulfill({json:null});return;}
     if(resource==='list_owned_publications') {await route.fulfill({json:items.map(item=>({itemId:item.id,status:item.visibility==='private'?'private':'published',message:''}))});return;}
@@ -102,6 +111,7 @@ async function fakeBackend(page: Page) {
       const { p_category_id } = request.postDataJSON(); categories = categories.filter(category => category.id !== p_category_id); items = items.map(item => item.category_id === p_category_id ? { ...item, category_id: null } : item);
       await route.fulfill({ json: null }); return;
     }
+    if (url.pathname.includes('/rpc/')) throw new Error(`Unexpected fixture RPC: ${resource}`);
     const rows = resource === 'categories' ? categories : resource === 'collections' ? collections : items;
     const id = url.searchParams.get('id')?.replace('eq.', '');
     if (request.method() === 'POST') {

@@ -2,6 +2,8 @@
 
 ## Start here
 
+**October 10 deployment update:** Tasks 1–5 have local implementation commits. With the owner's subsequent deployment authorization, all seven social migrations and `member-media` are deployed. All feature flags remain off. The CAPTCHA expiry bug and browser-fixture failures found by GitHub CI are corrected and the 14 browser scenarios pass locally. Continue from the current [deployment checkpoint](../../DEPLOYMENT-CHECKPOINT.md); the original findings and evidence below are retained as historical review context, not a current list of unapplied migrations. Authenticated live acceptance, concurrency, staged feature activation, and mobile device checks remain outstanding.
+
 The owner requested verification and deployment, then narrowed this review on October 10: finish small fixes, document larger work for a smaller model. **Do not release the current social implementation yet.** The earlier claim that it was fully validated was not supported by browser/device coverage.
 
 - Workspace: `C:\Users\syedz\Desktop\Web Dev\Josh-pin-collection`.

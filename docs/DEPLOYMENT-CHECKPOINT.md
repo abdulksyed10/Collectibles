@@ -1,10 +1,16 @@
 # Deployment checkpoint — updated October 10, 2026
 
-## Current social release: hold for review fixes
+## Current social release: database deployed, feature activation pending
 
-Continue on `codex/social-review`. See [the prioritized review handoff](superpowers/plans/2026-10-10-social-release-review.md) for confirmed security/functionality blockers, targeted local fixes, verification evidence, and deployment steps. The social release has **not** been pushed to main or deployed by this review. The live social-capabilities API returned HTTP 404 on October 10. Do not treat older release notes below as verification of the new social features.
+On October 10, the owner authorized database deployment and branch integration. All seven social migrations (`202610090001` through `202610090007`) are now applied; the linked remote migration history matches the local history. Existing metadata counts remained unchanged after deployment. Fresh schema/data backups for `public`, `private`, and `auth` were saved to ignored `.tmp/pre-social-release-20261010-v2-{schema,data}.sql`; they must stay local and have not been restore-tested.
 
-The owner requested larger fixes be left as a plan for a smaller model. Complete those fixes and acceptance checks before releasing. Existing production data and services were not modified.
+The new `member-media` function was deployed with the existing server-only configuration. Live checks confirm the production origin `https://www.sharecollectibles.com` receives a successful CORS preflight; unapproved origins receive 403, and missing/invalid authentication receives 401 with no-store responses. The capabilities RPC now returns 200. Database checks confirm profile backfill completion, denied client reads of private profile/follow/like tables, denied anonymous follow/like calls, and the `pin_media` execute grant.
+
+All four capability flags remain **false**. Deployment does not activate usernames, following, Friends-only sharing, or likes. Authenticated live test-account/upload/revocation checks and real PostgreSQL concurrency checks still need completion before staged activation. No live test accounts were created and no existing account or image was used for tests. Mobile device acceptance remains a later step.
+
+GitHub's existing production deployment points to `codex/private-pin-mvp`; integrating `main` does not itself change that Vercel setting. The available Vercel connector lacks access to the publisher's team, and the local CLI has no credentials. Confirm/update the production branch in that project's dashboard before expecting a `main` push to update the website.
+
+The first reviewed GitHub run passed backend Deno checks and app compilation, but exposed stale browser fixtures and a hosted CAPTCHA expiry bug. The corrections now pass all 183 automated tests, all 14 fixture browser scenarios, and TypeScript checks locally. See the review handoff for the remaining activation checks; historical entries below do not describe the current migration inventory.
 
 ## October 4 release repair and rollout boundary (historical)
 

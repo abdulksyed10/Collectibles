@@ -14,15 +14,22 @@
   };
   if (!isValidSiteKey(siteKey) || !isValidNonce(nonce)) { post('error'); return; }
   let widgetId = null;
-  const fail = () => post('error');
+  let acceptingToken = false;
+  const fail = () => { acceptingToken = false; post('error'); };
   const render = () => {
     if (widgetId || !window.turnstile || typeof window.turnstile.render !== 'function') return;
     try {
       widgetId = window.turnstile.render('#challenge', {
         sitekey: siteKey, theme, size: 'flexible', execution: 'execute', appearance: 'interaction-only', retry: 'never',
         'refresh-expired': 'manual', 'refresh-timeout': 'manual',
-        callback: token => isToken(token) ? post('token', token) : fail(),
-        'error-callback': fail, 'expired-callback': fail, 'timeout-callback': fail,
+        callback: token => {
+          if (!acceptingToken) return;
+          acceptingToken = false;
+          if (isToken(token)) post('token', token); else fail();
+        },
+        'error-callback': fail,
+        'expired-callback': () => { acceptingToken = false; post('expired'); },
+        'timeout-callback': fail,
       });
       post('ready');
     } catch { fail(); }
@@ -31,8 +38,8 @@
     let value; try { value = JSON.parse(event.data); } catch { return; }
     if (!value || value.nonce !== nonce || !['execute', 'reset'].includes(value.type) || !widgetId || !window.turnstile) return;
     try {
-      if (value.type === 'execute' && typeof window.turnstile.execute === 'function') window.turnstile.execute(widgetId);
-      if (value.type === 'reset' && typeof window.turnstile.reset === 'function') window.turnstile.reset(widgetId);
+      if (value.type === 'execute' && typeof window.turnstile.execute === 'function') { acceptingToken = true; window.turnstile.execute(widgetId); }
+      if (value.type === 'reset' && typeof window.turnstile.reset === 'function') { acceptingToken = false; window.turnstile.reset(widgetId); }
     } catch { fail(); }
   };
   window.addEventListener('message', command);
