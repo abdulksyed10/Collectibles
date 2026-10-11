@@ -1,6 +1,7 @@
 # Dependencies, local tooling, build products
 node_modules/
 .expo/
+.vercel/
 dist/
 web-build/
 coverage/
