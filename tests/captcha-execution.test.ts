@@ -21,6 +21,8 @@ test('Turnstile widgets are interaction-only and never configure automatic retry
 test('the auth form requests a challenge only from a submitted action and resumes that action with its token', () => {
   assert.match(auth, /requestCaptcha\('submit'\)/);
   assert.match(auth, /requestCaptcha\('resend'\)/);
+  assert.match(auth, /requestCaptcha\('recovery-resend'\)/);
+  assert.match(auth, /if \(!captchaChecking \|\| !captchaAction\.current\) return;\s*setCaptchaExecutionId/);
   assert.match(auth, /submitRef\.current\?\.\(token\)/);
   assert.doesNotMatch(auth, /disabled=\{[^}]*captchaToken/);
   assert.doesNotMatch(auth, /onPress=\{submit\}/);

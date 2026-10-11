@@ -5,6 +5,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/auth/recovery",
+      "destination": "/index.html"
+    },
+    {
       "source": "/privacy",
       "destination": "/index.html"
     },

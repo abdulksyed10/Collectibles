@@ -2,7 +2,7 @@ import { onPublicPreferencesChange } from '../lib/publisherPreferences';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Platform, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { FolderHeart, Package } from 'lucide-react-native';
+import { FolderHeart, Heart, Package, UserPlus } from 'lucide-react-native';
 import type { ItemImage, PublicEntryCard, PublicTopicCard } from '../domain/models';
 import { useRepository } from '../data/RepositoryProvider';
 import { publicPhotoUrl } from '../lib/sharing';
@@ -11,6 +11,8 @@ import { PublicSafetyControls } from '../components/PublicSafetyControls';
 import { FollowButton } from '../social/FollowButton';
 import { LikeButton } from '../social/LikeButton';
 import { CollectorProfileScreen } from '../social/CollectorProfileScreen';
+import { IconActionButton } from '../components/IconActionButton';
+import { PostCard } from '../components/PostCard';
 
 type ExploreView = 'entries' | 'collections';
 type ExploreCard = PublicEntryCard | PublicTopicCard;
@@ -42,6 +44,15 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
   const loadingMoreRef = useRef(false);
   const refresh = useCallback(() => setRevision(value => value + 1), []);
   useEffect(() => onPublicPreferencesChange(refresh), [refresh]);
+
+  function updateEntryLikes(itemId: string, likes: NonNullable<PublicEntryCard['likes']>) {
+    setCards(current => current.map(card => isEntry(card) && card.id === itemId ? { ...card, likes } : card));
+    setSelectedEntry(current => current?.id === itemId ? { ...current, likes } : current);
+  }
+  function updatePublisherRelationship(publisherId: string, relationship: NonNullable<PublicEntryCard['relationship']>) {
+    setCards(current => current.map(card => isEntry(card) && card.publisherId === publisherId ? { ...card, relationship } : card));
+    setSelectedEntry(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
+  }
 
   async function loadDemoPhotos(nextCards: ExploreCard[]) {
     if (!demo) return {};
@@ -130,13 +141,18 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
       </View>}
       renderItem={({ item, index }) => {
         const entry = isEntry(item); const image = photoUrl(item); const key = cardKey(item); const imageFailed = failedPhotos.has(key);
-        const name = entry ? item.title : item.name;
-        return <View style={{ width: `${100 / columns}%`, padding: 7 }}><Pressable accessibilityRole="button" accessibilityLabel={entry ? `View ${item.title}` : `View ${item.name} collection`} onPress={() => { if (entry) setSelectedEntry(item); else onOpenTopic(item.key); }} style={({ pressed }) => [{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, overflow: 'hidden', opacity: pressed ? 0.85 : 1 }]}>
-          <View style={{ aspectRatio: 1.18, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}>
-            {image && !imageFailed ? <Image key={`${key}-${revision}`} source={{ uri: image }} cachePolicy="none" style={{ width: '100%', height: '100%' }} contentFit="cover" accessibilityLabel={entry ? item.title : `${item.name} cover`} onError={() => setFailedPhotos(current => new Set(current).add(key))} /> : entry ? <Package size={42} color={index % 2 ? '#82967C' : '#8BA1AA'} strokeWidth={1.2} /> : <FolderHeart size={42} color={index % 2 ? '#82967C' : '#8BA1AA'} strokeWidth={1.2} />}
+        const media = image && !imageFailed ? <Image key={`${key}-${revision}`} source={{ uri: image }} cachePolicy="none" style={{ width: '100%', height: '100%' }} contentFit="cover" accessibilityLabel={entry ? item.title : `${item.name} cover`} onError={() => setFailedPhotos(current => new Set(current).add(key))} /> : entry ? <Package size={42} color={index % 2 ? '#82967C' : '#8BA1AA'} strokeWidth={1.2} /> : <FolderHeart size={42} color={index % 2 ? '#82967C' : '#8BA1AA'} strokeWidth={1.2} />;
+        if (!entry) return <View style={{ width: `${100 / columns}%`, padding: 7 }}><PostCard title={item.name} subtitle={`${item.itemCount} ${item.itemCount === 1 ? 'item' : 'items'} · ${item.collectionCount} ${item.collectionCount === 1 ? 'collection' : 'collections'}`} media={media} mediaAspectRatio={1.18} onOpen={() => onOpenTopic(item.key)} /></View>;
+        const publisherId = item.creator?.publisherId ?? item.publisherId;
+        const footer = item.creator && publisherId ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, minWidth: 0 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.creator.username ?? 'collector'}`} onPress={() => setProfileId(item.creator!.publisherId)} style={{ flexGrow: 1, flexShrink: 1, minWidth: 96, minHeight: 48, justifyContent: 'center' }}><Text numberOfLines={1} style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 12 }}>@{item.creator.username ?? 'collector'}</Text></Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {socialActions && item.relationship && publisherId !== ownPublisherId ? <FollowButton variant="compact" collector={{ publisherId, username: item.creator.username, relationship: item.relationship }} onChanged={relationship => updatePublisherRelationship(publisherId, relationship)} /> : null}
+            {socialActions && item.likes ? publisherId === ownPublisherId ? <IconActionButton label={`${item.likes.count} ${item.likes.count === 1 ? 'like' : 'likes'}`} icon={Heart} count={item.likes.count} onPress={() => undefined} disabled /> : <LikeButton variant="compact" itemId={item.id} value={item.likes} onChanged={likes => updateEntryLikes(item.id, likes)} /> : null}
+            {!socialActions && onSignIn ? <><IconActionButton label="Sign in to follow" icon={UserPlus} onPress={onSignIn} />{item.likes ? <IconActionButton label="Sign in to like" icon={Heart} count={item.likes.count} onPress={onSignIn} /> : null}</> : null}
           </View>
-          <View style={{ padding: 13, gap: 5 }}><Text numberOfLines={2} style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink }}>{name}</Text><Text numberOfLines={1} style={[ui.muted, { fontSize: 12 }]}>{entry ? item.collectionName : `${item.itemCount} ${item.itemCount === 1 ? 'item' : 'items'} · ${item.collectionCount} ${item.collectionCount === 1 ? 'collection' : 'collections'}`}</Text></View>
-        </Pressable>{entry && socialActions && item.creator ? <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.creator.username ?? 'collector'}`} onPress={() => setProfileId(item.creator!.publisherId)} style={{ paddingHorizontal: 12, paddingTop: 2 }}><Text numberOfLines={1} style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 12 }}>@{item.creator.username ?? 'collector'}</Text></Pressable> : null}{entry && socialActions && item.creator && item.relationship ? <View style={{ padding: 12, paddingTop: 8, gap: 8 }}>{item.publisherId !== ownPublisherId ? <FollowButton collector={{ publisherId: item.creator.publisherId, username: item.creator.username, relationship: item.relationship }} onChanged={relationship => setCards(current => current.map(card => isEntry(card) && card.id === item.id ? { ...card, relationship } : card))} /> : null}{item.likes ? item.publisherId === ownPublisherId ? <Text style={[ui.muted, { fontSize: 12 }]}>{item.likes.count} {item.likes.count === 1 ? 'like' : 'likes'}</Text> : <LikeButton itemId={item.id} value={item.likes} onChanged={likes => setCards(current => current.map(card => isEntry(card) && card.id === item.id ? { ...card, likes } : card))} /> : null}</View> : entry && onSignIn && item.creator ? <View style={{ padding: 12, paddingTop: 0, gap: 8 }}><Button title="Sign in to follow" secondary onPress={onSignIn} />{item.likes ? <Button title={`Sign in to like${item.likes.count ? ` · ${item.likes.count}` : ''}`} secondary onPress={onSignIn} /> : null}</View> : null}</View>;
+        </View> : undefined;
+        return <View style={{ width: `${100 / columns}%`, padding: 7 }}><PostCard title={item.title} subtitle={item.collectionName} media={media} mediaAspectRatio={1.18} onOpen={() => setSelectedEntry(item)} footer={footer} /></View>;
       }}
       ListEmptyComponent={loading ? <View style={{ alignItems: 'center', padding: 36 }}><ActivityIndicator color={colors.green} /></View> : !error ? <View style={{ alignItems: 'center', padding: 36, gap: 9 }}><Package size={36} color={colors.muted} strokeWidth={1.2} /><Text style={{ color: colors.ink, fontFamily: fonts.bold }}>Nothing shared yet</Text><Text style={ui.muted}>Check back after collectors share entries.</Text></View> : null}
       ListFooterComponent={hasMore ? <Button title={`Load more ${viewTitle.toLowerCase()}`} secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
@@ -145,8 +161,10 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
       {selectedEntry.hasPhoto ? <Image source={{ uri: demo ? photos[selectedEntry.id]?.url : publicPhotoUrl(selectedEntry.collectionId, selectedEntry.id, 'full') }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selectedEntry.title} onError={() => setFailedPhotos(current => new Set(current).add(selectedEntry.id))} /> : <View style={{ minHeight: 220, alignItems: 'center', justifyContent: 'center', gap: 10 }}><Package size={44} color={colors.muted} /><Text style={ui.muted}>No photo</Text></View>}
       <Text style={ui.muted}>{selectedEntry.collectionName}</Text>
       {socialActions && selectedEntry.creator ? <Pressable accessibilityRole="button" accessibilityLabel={`View ${selectedEntry.creator.username ?? 'collector'}`} onPress={() => { setSelectedEntry(null); setProfileId(selectedEntry.creator!.publisherId); }}><Text style={{ color: colors.green, fontFamily: fonts.medium }}>@{selectedEntry.creator.username ?? 'collector'}</Text></Pressable> : null}
-      {socialActions && selectedEntry.creator && selectedEntry.relationship && selectedEntry.publisherId !== ownPublisherId ? <FollowButton collector={{ publisherId: selectedEntry.creator.publisherId, username: selectedEntry.creator.username, relationship: selectedEntry.relationship }} onChanged={relationship => { setSelectedEntry(current => current ? { ...current, relationship } : current); setCards(current => current.map(card => isEntry(card) && card.id === selectedEntry.id ? { ...card, relationship } : card)); }} /> : null}
-      {socialActions && selectedEntry.likes ? selectedEntry.publisherId === ownPublisherId ? <Text style={[ui.muted, { fontSize: 12 }]}>{selectedEntry.likes.count} {selectedEntry.likes.count === 1 ? 'like' : 'likes'}</Text> : <LikeButton itemId={selectedEntry.id} value={selectedEntry.likes} onChanged={likes => { setSelectedEntry(current => current ? { ...current, likes } : current); setCards(current => current.map(card => isEntry(card) && card.id === selectedEntry.id ? { ...card, likes } : card)); }} /> : null}
+      {socialActions && selectedEntry.creator ? <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+        {selectedEntry.likes ? selectedEntry.publisherId === ownPublisherId ? <IconActionButton label={`${selectedEntry.likes.count} ${selectedEntry.likes.count === 1 ? 'like' : 'likes'}`} icon={Heart} count={selectedEntry.likes.count} onPress={() => undefined} disabled /> : <LikeButton variant="compact" itemId={selectedEntry.id} value={selectedEntry.likes} onChanged={likes => updateEntryLikes(selectedEntry.id, likes)} /> : null}
+        {selectedEntry.relationship && selectedEntry.creator.publisherId !== ownPublisherId ? <FollowButton variant="compact" collector={{ publisherId: selectedEntry.creator.publisherId, username: selectedEntry.creator.username, relationship: selectedEntry.relationship }} onChanged={relationship => updatePublisherRelationship(selectedEntry.creator!.publisherId, relationship)} /> : null}
+      </View> : null}
       <Button title="View full collection" secondary onPress={() => { const collectionId = selectedEntry.collectionId; setSelectedEntry(null); onOpenCollection(collectionId); }} />
       <PublicSafetyControls repository={repository} collectionId={selectedEntry.collectionId} itemId={selectedEntry.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelectedEntry(null); refresh(); }} />
     </Sheet> : null}

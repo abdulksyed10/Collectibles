@@ -1,7 +1,25 @@
 import { AppState, Platform } from 'react-native';
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { supabase, requireClient } from '../lib/supabase';
+import { authStorage, supabase, requireClient } from '../lib/supabase';
+import { isCurrentRecoveryMarker, recoveryMarkerFromStorage, recoveryPageUrl } from './recovery';
+
+const recoveryMarkerKey = 'collectibles.password-recovery.v1';
+
+async function markRecovery(userId: string) {
+  await authStorage.setItem(recoveryMarkerKey, JSON.stringify({ userId, startedAt: Date.now() }));
+}
+
+async function clearRecoveryMarker() {
+  await authStorage.removeItem(recoveryMarkerKey);
+}
+
+function configuredRecoveryUrl() {
+  const configured = process.env.EXPO_PUBLIC_WEB_URL?.trim() || (typeof window !== 'undefined' ? window.location.origin : '');
+  if (!configured) return undefined;
+  try { return recoveryPageUrl(configured); } catch { return undefined; }
+}
+
 export function useSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(Boolean(supabase));
@@ -9,29 +27,55 @@ export function useSession() {
   useEffect(() => {
     if (!supabase) return;
     let mounted = true;
-    let authEventSeen = false;
+    let recoveryEventSeen = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, next) => {
-      authEventSeen = true;
       if (!mounted) return;
-      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
-      if (event === 'SIGNED_OUT') setRecovery(false);
+      if (event === 'PASSWORD_RECOVERY') {
+        recoveryEventSeen = true;
+        setRecovery(true);
+        if (next?.user.id) void markRecovery(next.user.id);
+      }
+      if (event === 'SIGNED_OUT') {
+        setRecovery(false);
+        void clearRecoveryMarker();
+      }
       setSession(next); setLoading(false);
     });
-    supabase.auth.getSession().then(({ data }) => { if (mounted && !authEventSeen) { setSession(data.session); setLoading(false); } }).catch(() => { if (mounted) setLoading(false); });
+    supabase.auth.getSession().then(async ({ data }) => {
+      const marker = recoveryMarkerFromStorage(await authStorage.getItem(recoveryMarkerKey));
+      const restoreRecovery = isCurrentRecoveryMarker(marker, data.session?.user.id);
+      if (marker && !restoreRecovery) void clearRecoveryMarker();
+      if (mounted && !recoveryEventSeen) {
+        setRecovery(restoreRecovery);
+        setSession(data.session); setLoading(false);
+      }
+    }).catch(() => { if (mounted) setLoading(false); });
     const state = AppState.addEventListener('change', value => {
       if (value === 'active') supabase?.auth.startAutoRefresh(); else supabase?.auth.stopAutoRefresh();
     });
     if (Platform.OS !== 'web') supabase.auth.startAutoRefresh();
     return () => { mounted = false; subscription.unsubscribe(); state.remove(); supabase?.auth.stopAutoRefresh(); };
   }, []);
-  return { session, loading, recovery, finishRecovery: () => setRecovery(false) };
+  return { session, loading, recovery, finishRecovery: () => { setRecovery(false); void clearRecoveryMarker(); } };
 }
 export const auth = {
   async signIn(email: string, password: string, captchaToken?: string) { const { error } = await requireClient().auth.signInWithPassword({ email: email.trim(), password, options: captchaToken ? { captchaToken } : undefined }); if (error) throw error; },
   async signUp(email: string, password: string, captchaToken?: string) { const { data, error } = await requireClient().auth.signUp({ email: email.trim(), password, options: captchaToken ? { captchaToken } : undefined }); if (error) throw error; return Boolean(data.session); },
   async resendConfirmation(email: string, captchaToken?: string) { const { error } = await requireClient().auth.resend({ type: 'signup', email: email.trim(), options: captchaToken ? { captchaToken } : undefined }); if (error) throw error; },
-  async sendReset(email: string, captchaToken?: string) { const { error } = await requireClient().auth.resetPasswordForEmail(email.trim(), captchaToken ? { captchaToken } : undefined); if (error) throw error; },
-  async verifyReset(email: string, token: string) { const { error } = await requireClient().auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'recovery' }); if (error) throw error; },
+  async sendReset(email: string, captchaToken?: string) {
+    const redirectTo = configuredRecoveryUrl();
+    const { error } = await requireClient().auth.resetPasswordForEmail(email.trim(), {
+      ...(captchaToken ? { captchaToken } : {}),
+      ...(redirectTo ? { redirectTo } : {}),
+    });
+    if (error) throw error;
+  },
+  async verifyReset(email: string, token: string) {
+    const { data, error } = await requireClient().auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'recovery' });
+    if (error) throw error;
+    if (!data.session?.user.id) throw new Error('Unable to verify this recovery code. Please request a new one.');
+    await markRecovery(data.session.user.id);
+  },
   async updatePassword(password: string) { const { error } = await requireClient().auth.updateUser({ password }); if (error) throw error; },
   async signOut() { const { error } = await requireClient().auth.signOut({ scope: 'local' }); if (error) throw error; },
 };

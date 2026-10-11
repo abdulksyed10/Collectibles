@@ -9,6 +9,7 @@ import { DMSans_500Medium } from '@expo-google-fonts/dm-sans/500Medium';
 import { DMSans_700Bold } from '@expo-google-fonts/dm-sans/700Bold';
 import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif/400Regular';
 import { useSession } from './src/auth/session';
+import { recoveryIntentFromUrl, recoveryPageUrl, type RecoveryIntent } from './src/auth/recovery';
 import { AuthScreen, RecoveryScreen } from './src/screens/AuthScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { colors } from './src/components/ui';
@@ -30,6 +31,9 @@ import { CollectorProfileScreen } from './src/social/CollectorProfileScreen';
 import { SharedEntryScreen } from './src/social/SharedEntryScreen';
 import { clearPendingSocialDestination, consumePendingSocialDestination, setPendingSocialDestination } from './src/social/pendingDestination';
 export default function App() { return <ThemeProvider><CollectiblesApp /></ThemeProvider>; }
+function configuredWebUrl() {
+  return process.env.EXPO_PUBLIC_WEB_URL?.trim() || (Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : '');
+}
 function CollectiblesApp() {
   const { effectiveTheme } = useTheme();
   const [fontsLoaded, fontError] = useFonts({ DMSans_400Regular, DMSans_500Medium, DMSans_700Bold, InstrumentSerif_400Regular });
@@ -42,6 +46,7 @@ function CollectiblesApp() {
   const [guestExplore, setGuestExplore] = useState(false);
   const [previewTopic, setPreviewTopic] = useState<string | null>(null);
   const [callbackError, setCallbackError] = useState('');
+  const [recoveryIntent, setRecoveryIntent] = useState<RecoveryIntent | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? recoveryIntentFromUrl(window.location.href, configuredWebUrl()) : null);
   const sessionIdentity = session?.user.id ?? 'guest';
   const previousSessionIdentity = useRef<string | null>(session?.user.id ?? null);
   useEffect(() => {
@@ -54,6 +59,9 @@ function CollectiblesApp() {
     if (pending) setSocialDestination(pending);
   }, [session?.user.id]);
   useEffect(() => {
+    if (session && recoveryIntent && !recovery) setRecoveryIntent(null);
+  }, [recovery, recoveryIntent, session]);
+  useEffect(() => {
     let active = true;
     const processUrl = async (url: string | null) => {
       if (!url) return;
@@ -62,7 +70,7 @@ function CollectiblesApp() {
         if (!active) return;
         if (callback === 'handled') {
           setCallbackError('');
-          setSharedId(null); setSocialDestination(null); setPublicInfoPage(null); clearPendingSocialDestination();
+          setRecoveryIntent(null); setSharedId(null); setSocialDestination(null); setPublicInfoPage(null); clearPendingSocialDestination();
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
             const clean = new URL(window.location.href);
             clean.pathname = '/'; clean.search = ''; clean.hash = '';
@@ -81,7 +89,18 @@ function CollectiblesApp() {
         }
         return;
       }
+      const nextRecoveryIntent = recoveryIntentFromUrl(url, configuredWebUrl());
+      if (nextRecoveryIntent) {
+        setRecoveryIntent(nextRecoveryIntent);
+        setSharedId(null); setSocialDestination(null); setPublicInfoPage(null); clearPendingSocialDestination();
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const cleanRecoveryUrl = recoveryPageUrl(configuredWebUrl());
+          window.history.replaceState({}, '', cleanRecoveryUrl);
+        }
+        return;
+      }
       if (active) {
+        setRecoveryIntent(null);
         setPublicInfoPage(publicInfoPageFromUrl(url));
         setSharedId(sharedIdFromUrl(url));
         setSocialDestination(socialDestinationFromUrl(url));
@@ -123,6 +142,13 @@ function CollectiblesApp() {
       window.history.replaceState({}, '', url.toString());
     }
   }
+  function leaveRecoveryRoute() {
+    setRecoveryIntent(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href); url.pathname = '/'; url.search = ''; url.hash = '';
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
   let content;
   if (publicInfoPage) {
     content = <PublicInfoScreen page={publicInfoPage} onBack={leavePublicInfoPage} />;
@@ -140,6 +166,8 @@ function CollectiblesApp() {
     content = <RepositoryProvider value={repository}><SocialProfileProvider key={session.user.id}><LibraryScreen key={session.user.id} email={session.user.email ?? 'Your account'} onPreviewShared={setPreviewId} onPreviewTopic={setPreviewTopic} /></SocialProfileProvider></RepositoryProvider>;
   } else if (guestExplore) {
     content = <RepositoryProvider value={repository}><GuestExploreScreen onSignIn={() => setGuestExplore(false)} onOpenCollection={setPreviewId} onOpenTopic={setPreviewTopic} /></RepositoryProvider>;
+  } else if (!session && recoveryIntent) {
+    content = <AuthScreen onDemo={() => setDemo(createDemoRepository())} onExplore={() => setGuestExplore(true)} callbackError={callbackError} recoveryIntent={recoveryIntent} onLeaveRecoveryRoute={leaveRecoveryRoute} />;
   } else {
     content = <AuthScreen onDemo={() => setDemo(createDemoRepository())} onExplore={() => setGuestExplore(true)} callbackError={callbackError} />;
   }

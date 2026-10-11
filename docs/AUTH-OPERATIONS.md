@@ -20,7 +20,9 @@ Supabase's **Password Verification Attempt** hook can implement a real account-l
 
 Before inviting beta users, configure a transactional SMTP provider and a sender address on a domain the project owns. Publish the provider's SPF and DKIM records, then add a DMARC record. Test signup confirmation, password recovery, and resend-confirmation messages with disposable non-team mailboxes.
 
-The recovery template must contain the six-digit recovery code expected by the app. The UI provides a rate-limited resend-confirmation action. Do not use a personal inbox as the production sender.
+The hosted **Reset password** template must match `supabase/templates/recovery.html`: it displays Supabase's `{{ .Token }}` recovery code and links only to `https://www.sharecollectibles.com/auth/recovery`, which asks the user to enter that code. Do not include `{{ .ConfirmationURL }}`, `{{ .TokenHash }}`, or a token in a link. Supabase currently documents an eight-digit OTP; the app accepts a numeric code from six to ten digits so this setting can change without a client update. The UI provides a CAPTCHA-protected recovery-code resend after a 60-second local cooldown. Do not use a personal inbox as the production sender.
+
+`supabase/config.toml` and the checked-in HTML are a local-development reference. For the hosted project, update only the recovery subject/body in **Supabase Dashboard → Authentication → Emails → Reset password**, or PATCH only the corresponding `mailer_subjects_recovery` and `mailer_templates_recovery_content` Management API settings. A web deploy or `db push` does not update hosted Auth email templates.
 
 ## Turnstile and rate limits
 
@@ -28,7 +30,7 @@ Create a Cloudflare Turnstile widget for the deployed web host, currently `www.s
 
 In **Authentication → Rate Limits**, set conservative limits for signups, confirmation/resend emails, recovery emails, token verification, and password sign-ins. Start with a beta-sized allowance that normal users can meet, observe the logs, then adjust individual endpoints. A generic project-wide limit is not a substitute for endpoint limits.
 
-Add the deployed web URL and the mobile redirect `collectibles://auth/callback` under **Authentication → URL Configuration**. The web CAPTCHA page must be reachable at `/auth/captcha.html` from that same HTTPS origin.
+Set the Site URL to `https://www.sharecollectibles.com`, then allow `https://www.sharecollectibles.com/**`, the retained Vercel origin during migration, and `collectibles://**` under **Authentication → URL Configuration**. The web CAPTCHA page must be reachable at `/auth/captcha.html` and recovery must be reachable at `/auth/recovery` from that same HTTPS origin.
 
 ## Signup admission hook
 

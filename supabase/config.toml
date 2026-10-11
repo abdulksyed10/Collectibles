@@ -11,14 +11,18 @@ major_version = 17
 
 [auth]
 enabled = true
-site_url = "https://collectibles-three.vercel.app"
-additional_redirect_urls = ["https://collectibles-three.vercel.app/**", "collectibles://**"]
+site_url = "https://www.sharecollectibles.com"
+additional_redirect_urls = ["https://www.sharecollectibles.com/**", "https://collectibles-three.vercel.app/**", "collectibles://**"]
 enable_signup = true
 minimum_password_length = 8
 
 [auth.email]
 enable_signup = true
 enable_confirmations = true
+
+[auth.email.template.recovery]
+subject = "Reset your Collectibles password"
+content_path = "./supabase/templates/recovery.html"
 
 [functions.media]
 # getUser(token) validates tokens in code, including new asymmetric signing keys.
