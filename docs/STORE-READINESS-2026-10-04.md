@@ -100,7 +100,7 @@ Verify private bucket access, bucket-scoped credentials, provider account MFA, u
 
 Ship existing email/password plus Google and Apple. Google uses Supabase browser OAuth/PKCE on web and native system browser. Apple uses native iOS authentication and Supabase OAuth on web/Android so Apple users can use other devices. Do not embed Google login in the CAPTCHA WebView. Apple supplies the privacy-preserving login option needed when adding Google on iOS. [Apple login guideline](https://developer.apple.com/app-store/review/guidelines/#login-services).
 
-Keep Microsoft, Facebook, GitHub, phone/SMS and email magic-link login for later demand; they add provider review, support and/or messaging costs. Email/password already satisfies the email option. Password recovery codes remain supported. Use the same Supabase user ID across linked identities; never reassign collection ownership based on an email typed by a client.
+Keep Microsoft, Facebook, GitHub, phone/SMS and email magic-link login for later demand; they add provider review, support and/or messaging costs. Email/password already satisfies the email option. Password recovery uses Supabase's one-time reset links. Use the same Supabase user ID across linked identities; never reassign collection ownership based on an email typed by a client.
 
 ## Execution sequence / handoff
 

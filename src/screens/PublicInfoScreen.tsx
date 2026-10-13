@@ -64,7 +64,7 @@ export function PublicInfoScreen({ page, onBack }: { page: PublicInfoPage; onBac
     <Heading>Reporting and blocking</Heading>
     <Paragraph>Only signed-in members can report shared content. Reports from five different signed-in members hide the reported entry or collection from Explore and send it to review. Anyone can block a collector from their own view: guest blocks apply on that device, while signed-in blocks apply to the account. Blocking does not hide a collector’s content for other people. Content may be removed and repeated violations can lead to publishing restrictions.</Paragraph>
   </> : page === 'support' ? <>
-    <Paragraph>Need help with Collectibles? Include your account email, device type, app version, and a short description of the problem. Do not send your password, recovery code, R2 keys, or other credentials.</Paragraph>
+    <Paragraph>Need help with Collectibles? Include your account email, device type, app version, and a short description of the problem. Do not send your password, password reset link, R2 keys, or other credentials.</Paragraph>
     {canContact ? <Button title={`Email ${address}`} icon={Mail} onPress={() => { void openSupport('Collectibles support request'); }} /> : <Text style={[ui.text, { color: colors.danger }]}>Email support is temporarily unavailable.</Text>}
     {message ? <Text accessibilityLiveRegion="polite" style={ui.muted}>{message}</Text> : null}
   </> : <>

@@ -18,11 +18,9 @@ Supabase's **Password Verification Attempt** hook can implement a real account-l
 
 ## Email delivery and recovery
 
-Before inviting beta users, configure a transactional SMTP provider and a sender address on a domain the project owns. Publish the provider's SPF and DKIM records, then add a DMARC record. Test signup confirmation, password recovery, and resend-confirmation messages with disposable non-team mailboxes.
+On the Free plan, Supabase's managed sender limits the project to two authentication emails per hour. Keep the hosted **Reset password** template at Supabase's default link-based template unless you later configure custom SMTP. The app supplies `https://www.sharecollectibles.com/auth/recovery` as the redirect destination and securely exchanges the one-time recovery link before showing the new-password form.
 
-The hosted **Reset password** template must match `supabase/templates/recovery.html`: it displays Supabase's `{{ .Token }}` recovery code and links only to `https://www.sharecollectibles.com/auth/recovery`, which asks the user to enter that code. Do not include `{{ .ConfirmationURL }}`, `{{ .TokenHash }}`, or a token in a link. Supabase currently documents an eight-digit OTP; the app accepts a numeric code from six to ten digits so this setting can change without a client update. The UI provides a CAPTCHA-protected recovery-code resend after a 60-second local cooldown. Do not use a personal inbox as the production sender.
-
-`supabase/config.toml` and the checked-in HTML are a local-development reference. For the hosted project, update only the recovery subject/body in **Supabase Dashboard → Authentication → Emails → Reset password**, or PATCH only the corresponding `mailer_subjects_recovery` and `mailer_templates_recovery_content` Management API settings. A web deploy or `db push` does not update hosted Auth email templates.
+`supabase/templates/recovery.html` is a local-development reference for a link-based recovery email. A web deploy or `db push` does not update hosted Auth email templates. If the project later moves to a transactional SMTP provider, customize the hosted template only with `{{ .ConfirmationURL }}`; never place a raw token in a hand-written URL. Do not use a personal inbox as the production sender.
 
 ## Turnstile and rate limits
 

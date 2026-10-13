@@ -9,7 +9,7 @@ import { DMSans_500Medium } from '@expo-google-fonts/dm-sans/500Medium';
 import { DMSans_700Bold } from '@expo-google-fonts/dm-sans/700Bold';
 import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif/400Regular';
 import { useSession } from './src/auth/session';
-import { recoveryIntentFromUrl, recoveryPageUrl, type RecoveryIntent } from './src/auth/recovery';
+import { recoveryIntentFromUrl, recoveryLinkFromUrl, recoveryPageUrl, type RecoveryIntent } from './src/auth/recovery';
 import { AuthScreen, RecoveryScreen } from './src/screens/AuthScreen';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { colors } from './src/components/ui';
@@ -37,7 +37,7 @@ function configuredWebUrl() {
 function CollectiblesApp() {
   const { effectiveTheme } = useTheme();
   const [fontsLoaded, fontError] = useFonts({ DMSans_400Regular, DMSans_500Medium, DMSans_700Bold, InstrumentSerif_400Regular });
-  const { session, loading, recovery, finishRecovery } = useSession();
+  const { session, loading, recovery, beginPasswordRecovery, finishRecovery } = useSession();
   const [demo, setDemo] = useState<CollectionRepository | null>(null);
   const [sharedId, setSharedId] = useState<string | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? sharedIdFromUrl(window.location.href) : null);
   const [socialDestination, setSocialDestination] = useState<SocialDestination | null>(() => Platform.OS === 'web' && typeof window !== 'undefined' ? socialDestinationFromUrl(window.location.href) : null);
@@ -89,6 +89,21 @@ function CollectiblesApp() {
         }
         return;
       }
+      const recoveryLink = recoveryLinkFromUrl(url, configuredWebUrl());
+      if (recoveryLink) {
+        try {
+          await beginPasswordRecovery(url);
+          if (!active) return;
+          setCallbackError('');
+          setRecoveryIntent(null); setSharedId(null); setSocialDestination(null); setPublicInfoPage(null); clearPendingSocialDestination();
+        } catch (error) {
+          if (!active) return;
+          setCallbackError(error instanceof Error ? error.message : 'This password reset link is invalid or expired. Request a new link.');
+          setRecoveryIntent('request-link'); setSharedId(null); setSocialDestination(null); setPublicInfoPage(null); clearPendingSocialDestination();
+        }
+        if (Platform.OS === 'web' && typeof window !== 'undefined') window.history.replaceState({}, '', recoveryPageUrl(configuredWebUrl()));
+        return;
+      }
       const nextRecoveryIntent = recoveryIntentFromUrl(url, configuredWebUrl());
       if (nextRecoveryIntent) {
         setRecoveryIntent(nextRecoveryIntent);
@@ -115,7 +130,7 @@ function CollectiblesApp() {
     void Linking.getInitialURL().then(processUrl);
     const listener = Linking.addEventListener('url', event => { void processUrl(event.url); });
     return () => { active = false; listener.remove(); };
-  }, []);
+  }, [beginPasswordRecovery]);
   function leaveSharedView() {
     setSharedId(null);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {

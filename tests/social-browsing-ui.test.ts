@@ -12,5 +12,5 @@ test('signed-in Explore can open Following and shared collector profiles without
   assert.match(catalog, /setProfileId/);
   assert.match(visibleCollection, /CollectorProfileScreen/);
   assert.match(card, /onOpenCollector \? <Pressable/);
-  assert.match(card, /onPress=\{onOpen\}/);
+  assert.match(card, /<PostCard[^>]*onOpen=\{onOpen\}/);
 });

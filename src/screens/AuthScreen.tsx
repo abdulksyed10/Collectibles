@@ -4,7 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useW
 import { ArrowRight, Check, LockKeyhole, Layers3, Eye, EyeOff } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../auth/session';
-import { normalizeRecoveryCode, type RecoveryIntent } from '../auth/recovery';
+import { type RecoveryIntent } from '../auth/recovery';
 import { serviceReady } from '../lib/supabase';
 import { Brand, Button, colors, ErrorMessage, Field, fonts, messageOf, ui } from '../components/ui';
 import { CollectionArtwork } from '../components/CollectionArtwork';
@@ -16,28 +16,25 @@ import { authLandingVisuals } from '../theme/authLanding';
 export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, onLeaveRecoveryRoute }: { onDemo: () => void; onExplore: () => void; callbackError?: string; recoveryIntent?: RecoveryIntent | null; onLeaveRecoveryRoute?: () => void }) {
   const wide = useWindowDimensions().width >= 860;
   const landing = authLandingVisuals(colors);
-  const [mode, setMode] = useState<'signin' | 'signup' | 'reset' | 'verify'>(() => recoveryIntent ? 'reset' : 'signin');
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [code, setCode] = useState('');
-  const [visible, setVisible] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState(() => recoveryIntent === 'legacy-link' ? 'This reset link cannot complete here. Request a recovery code to continue.' : '');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>(() => recoveryIntent ? 'reset' : 'signin');
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
+  const [visible, setVisible] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const [, setCaptchaToken] = useState<string | null>(null);
   const [captchaExecutionId, setCaptchaExecutionId] = useState(0);
   const [captchaResetId, setCaptchaResetId] = useState(0);
   const [captchaChecking, setCaptchaChecking] = useState(false);
-  const captchaAction = useRef<'submit' | 'resend' | 'recovery-resend' | null>(null);
+  const captchaAction = useRef<'submit' | 'resend' | null>(null);
   const submitRef = useRef<((verifiedToken?: string) => Promise<void>) | undefined>(undefined);
   const resendRef = useRef<((verifiedToken?: string) => Promise<void>) | undefined>(undefined);
-  const resendRecoveryRef = useRef<((verifiedToken?: string) => Promise<void>) | undefined>(undefined);
   const [credentialFailures, setCredentialFailures] = useState<number[]>([]);
   const [cooldowns, setCooldowns] = useState<Partial<Record<AuthOperation, number>>>({});
   const [canResendConfirmation, setCanResendConfirmation] = useState(false);
-  const [recoveryResendAt, setRecoveryResendAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const captchaSiteKey = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY?.trim() || '';
-  const captchaApplies = Boolean(captchaSiteKey) && mode !== 'verify';
-  const showCaptcha = Boolean(captchaSiteKey) && (mode !== 'verify' || captchaChecking);
+  const captchaApplies = Boolean(captchaSiteKey);
+  const showCaptcha = Boolean(captchaSiteKey);
   const operation = authOperationForMode(mode);
   const cooldownSeconds = secondsUntil(cooldowns[operation] ?? null, now);
-  const recoveryResendSeconds = secondsUntil(recoveryResendAt, now);
   const operationPaused = cooldownSeconds > 0;
   const handleCaptchaToken = useCallback((token: string) => {
     const action = captchaAction.current;
@@ -45,7 +42,6 @@ export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, o
     setCaptchaToken(token); setCaptchaChecking(false); setError('');
     if (action === 'submit') void submitRef.current?.(token);
     if (action === 'resend') void resendRef.current?.(token);
-    if (action === 'recovery-resend') void resendRecoveryRef.current?.(token);
   }, []);
   const handleCaptchaError = useCallback(() => { captchaAction.current = null; setCaptchaToken(null); setCaptchaChecking(false); }, []);
   useEffect(() => { if (callbackError) setError(callbackError); }, [callbackError]);
@@ -56,16 +52,15 @@ export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, o
   const previousRecoveryIntent = useRef<RecoveryIntent | null | undefined>(recoveryIntent);
   useEffect(() => {
     if (recoveryIntent && previousRecoveryIntent.current !== recoveryIntent) {
-      setMode('reset'); setError(''); setPassword(''); setCode(''); resetCaptcha();
-      setNotice(recoveryIntent === 'legacy-link' ? 'This reset link cannot complete here. Request a recovery code to continue.' : '');
+      setMode('reset'); setError(''); setPassword(''); resetCaptcha();
     }
     previousRecoveryIntent.current = recoveryIntent;
   }, [recoveryIntent]);
   useEffect(() => {
-    if (!Object.values(cooldowns).some(value => value && value > Date.now()) && !(recoveryResendAt && recoveryResendAt > Date.now())) return;
+    if (!Object.values(cooldowns).some(value => value && value > Date.now())) return;
     const interval = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(interval);
-  }, [cooldowns, recoveryResendAt]);
+  }, [cooldowns]);
   useEffect(() => {
     setCooldowns(current => {
       const active = Object.fromEntries(Object.entries(current).filter(([, value]) => value && value > now)) as Partial<Record<AuthOperation, number>>;
@@ -73,13 +68,13 @@ export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, o
     });
   }, [now]);
   function resetCaptcha() { captchaAction.current = null; setCaptchaToken(null); setCaptchaChecking(false); setCaptchaResetId(value => value + 1); }
-  function requestCaptcha(action: 'submit' | 'resend' | 'recovery-resend') { captchaAction.current = action; setCaptchaToken(null); setCaptchaChecking(true); }
+  function requestCaptcha(action: 'submit' | 'resend') { captchaAction.current = action; setCaptchaToken(null); setCaptchaChecking(true); }
   function setCooldown(operationName: AuthOperation, retryAt: number | null | undefined) {
     if (!retryAt) return;
     setCooldowns(current => ({ ...current, [operationName]: retryAt }));
     setNow(Date.now());
   }
-  function change(next: typeof mode) { setMode(next); setError(''); setNotice(''); setPassword(''); setCode(''); setCanResendConfirmation(false); setRecoveryResendAt(null); resetCaptcha(); }
+  function change(next: typeof mode) { setMode(next); setError(''); setNotice(''); setPassword(''); setCanResendConfirmation(false); resetCaptcha(); }
   async function submit(verifiedToken?: string) {
     if (!serviceReady || busy) return;
     const submittedAt = Date.now();
@@ -97,13 +92,7 @@ export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, o
       if (mode === 'signup') { const signedIn = await auth.signUp(email, password, token); if (!signedIn) { change('signin'); setCanResendConfirmation(true); setNotice('Check your email to confirm your account, then sign in here.'); } }
       if (mode === 'reset') {
         await auth.sendReset(email, token);
-        setMode('verify'); setRecoveryResendAt(submittedAt + 60_000);
-        setNotice('If an account uses this email, we sent a recovery code. Enter it below.');
-      }
-      if (mode === 'verify') {
-        const recoveryCode = normalizeRecoveryCode(code);
-        if (!recoveryCode) { setError('Enter the recovery code from your email.'); return; }
-        await auth.verifyReset(email, recoveryCode);
+        setNotice('If an account uses this email, we sent a password reset link. Open it to choose a new password.');
       }
     } catch (e) {
       const issue = mapAuthError(e, submittedAt);
@@ -112,8 +101,6 @@ export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, o
         setCredentialFailures(outcome.failures);
         if (outcome.retryAt) { setCooldown('signin', outcome.retryAt); setError('Too many incorrect attempts. Wait one hour before trying again.'); }
         else setError(issue.message);
-      } else if (mode === 'verify' && issue.kind === 'other') {
-        setError('That code is invalid or has expired. Try again or request a new code.');
       } else {
         setCooldown(operation, issue.retryAt);
         setError(issue.message);
@@ -137,32 +124,9 @@ export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, o
       setError(issue.message);
     } finally { if (captchaApplies) resetCaptcha(); setBusy(false); }
   }
-  async function resendRecovery(verifiedToken?: string) {
-    if (!serviceReady || busy) return;
-    const submittedAt = Date.now();
-    if (recoveryResendAt && recoveryResendAt > submittedAt) {
-      setError(`Wait ${secondsUntil(recoveryResendAt, submittedAt)} seconds before requesting another code.`);
-      return;
-    }
-    setError(''); setNotice('');
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setError('Enter the email address for this recovery request.'); return; }
-    if (captchaSiteKey && !verifiedToken) { requestCaptcha('recovery-resend'); return; }
-    setBusy(true);
-    try {
-      await auth.sendReset(email, verifiedToken);
-      setRecoveryResendAt(submittedAt + 60_000);
-      setNotice('If an account uses this email, we sent a new recovery code.');
-    } catch (reason) {
-      const issue = mapAuthError(reason, submittedAt);
-      const retryAt = issue.retryAt ?? submittedAt + 60_000;
-      setRecoveryResendAt(retryAt);
-      setError(issue.message);
-    } finally { resetCaptcha(); setBusy(false); }
-  }
   submitRef.current = submit;
   resendRef.current = resendConfirmation;
-  resendRecoveryRef.current = resendRecovery;
-  const heading = mode === 'signup' ? 'A home for your finds.' : mode === 'reset' ? 'Let’s get you back in.' : mode === 'verify' ? 'Check your inbox.' : 'Welcome to your collection.';
+  const heading = mode === 'signup' ? 'A home for your finds.' : mode === 'reset' ? 'Let’s get you back in.' : 'Welcome to your collection.';
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, padding: wide ? 36 : 24 }}><View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center', flex: 1 }}><View style={[ui.row, { justifyContent: 'space-between', marginBottom: wide ? 40 : 30 }]}><Brand /><View style={[ui.row, { gap: 6 }]}><LockKeyhole size={14} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Your own little world</Text></View></View><View style={{ flex: 1, flexDirection: wide ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: wide ? 80 : 28 }}>
     <View testID="auth-landing-panel" style={{ flex: wide ? 1 : undefined, width: wide ? undefined : '100%', padding: wide ? 36 : 0, backgroundColor: wide ? landing.surface : undefined, borderRadius: 32, alignItems: wide ? 'flex-start' : 'center', alignSelf: wide ? 'stretch' : undefined, justifyContent: 'center', minHeight: wide ? 580 : undefined }}>
       {wide ? <Text style={{ color: landing.eyebrow, fontFamily: fonts.bold, letterSpacing: 2, fontSize: 11, marginBottom: 22 }}>SMALL THINGS. GOOD STORIES.</Text> : null}
@@ -175,19 +139,17 @@ export function AuthScreen({ onDemo, onExplore, callbackError, recoveryIntent, o
       <View style={{ gap: 10 }}><Text style={[ui.title, { fontSize: 37, lineHeight: 41 }]}>{heading}</Text><Text style={ui.muted}>{mode === 'signin' ? 'Sign in to pick up where you left off.' : mode === 'signup' ? 'Start saving the things you love.' : 'Recover access to your private collection.'}</Text></View>
       {!serviceReady ? <View style={{ backgroundColor: colors.sand, padding: 15, borderRadius: 12 }}><Text style={[ui.text, { fontFamily: fonts.medium, fontSize: 13 }]}>Take a look around.</Text><Text style={[ui.muted, { fontSize: 12 }]}>Try a sample collection while account sign-in is being set up.</Text></View> : null}
       <View style={{ gap: 8 }}><Button title="Explore shared items" secondary={serviceReady} onPress={onExplore} disabled={busy} icon={Layers3} /><Button title="Try the demo" secondary onPress={onDemo} disabled={busy} icon={Layers3} /><Text style={[ui.muted, { fontSize: 12, textAlign: 'center' }]}>No account needed. Demo changes reset when you leave.</Text></View>
-      <View style={{ gap: 18 }}>{mode === 'verify' ? <View style={{ gap: 6 }}><Text style={ui.label}>Recovery email</Text><Text numberOfLines={1} style={[ui.text, { paddingHorizontal: 15, paddingVertical: 14, backgroundColor: colors.pale, borderWidth: 1, borderColor: colors.line, borderRadius: 12 }]}>{email}</Text></View> : <Field label="Email address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" editable={!busy} />}
+      <View style={{ gap: 18 }}><Field label="Email address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" editable={!busy} />
       {mode === 'signin' || mode === 'signup' ? <View><Field label="Password" value={password} onChangeText={setPassword} placeholder={mode === 'signup' ? '8+ characters, upper, lower, number' : 'Your password'} secureTextEntry={!visible} autoCapitalize="none" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} editable={!busy} onSubmitEditing={() => { void submit(); }} style={{ paddingRight: 52 }} /><Pressable accessibilityRole="button" accessibilityLabel={visible ? 'Hide password' : 'Show password'} onPress={() => setVisible(!visible)} style={{ position: 'absolute', right: 14, bottom: 14 }}>{visible ? <EyeOff size={21} color={colors.muted} /> : <Eye size={21} color={colors.muted} />}</Pressable></View> : null}
-      {mode === 'verify' ? <Field label="Recovery code" value={code} onChangeText={value => setCode(value.replace(/\s/g, ''))} placeholder="Code from your email" keyboardType="number-pad" autoComplete="one-time-code" editable={!busy} /> : null}
       {mode === 'signin' ? <Pressable accessibilityRole="button" disabled={busy} onPress={() => change('reset')} style={{ alignSelf: 'flex-end' }}><Text style={{ color: colors.green, fontFamily: fonts.medium, fontSize: 13 }}>Forgot password?</Text></Pressable> : null}
       {mode === 'signin' ? <SocialSignInButtons disabled={!serviceReady || busy} onError={setError} /> : null}
       {showCaptcha ? <CaptchaChallenge siteKey={captchaSiteKey} executionId={captchaExecutionId} resetId={captchaResetId} onToken={handleCaptchaToken} onError={handleCaptchaError} /> : null}
       {operationPaused ? <Text accessibilityRole="alert" style={[ui.muted, { fontSize: 13 }]}>Wait {cooldownSeconds} seconds before trying again.</Text> : null}
       <ErrorMessage message={error} />{notice ? <Text accessibilityRole="alert" style={[ui.text, { color: colors.green, fontSize: 14 }]}>{notice}</Text> : null}
-      <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'reset' ? 'Send recovery code' : 'Verify code'} onPress={() => { void submit(); }} loading={busy || captchaChecking} disabled={!serviceReady || operationPaused || captchaChecking} icon={ArrowRight} />
-      {mode === 'verify' ? <View style={{ flexDirection: 'row', gap: 8 }}><Button title="Change email" secondary onPress={() => change('reset')} disabled={busy || captchaChecking} style={{ flex: 1 }} /><Button title={recoveryResendSeconds ? `Resend in ${recoveryResendSeconds}s` : 'Resend code'} secondary onPress={() => { void resendRecovery(); }} loading={busy || captchaChecking} disabled={!serviceReady || Boolean(recoveryResendSeconds) || busy || captchaChecking} style={{ flex: 1 }} /></View> : null}
+      <Button title={mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send password reset link'} onPress={() => { void submit(); }} loading={busy || captchaChecking} disabled={!serviceReady || operationPaused || captchaChecking} icon={ArrowRight} />
       {mode === 'signin' && canResendConfirmation ? <Button title="Resend confirmation email" secondary onPress={() => { void resendConfirmation(); }} loading={busy || captchaChecking} disabled={!serviceReady || Boolean(cooldowns.resend && cooldowns.resend > now) || captchaChecking} /> : null}
       </View>
-      <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Collectibles?' : mode === 'signup' ? 'Already have an account?' : ''}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => { change(mode === 'signin' ? 'signup' : 'signin'); if (mode === 'reset' || mode === 'verify') onLeaveRecoveryRoute?.(); }}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
+      <View style={[ui.row, { justifyContent: 'center', flexWrap: 'wrap', gap: 5 }]}><Text style={ui.muted}>{mode === 'signin' ? 'New to Collectibles?' : mode === 'signup' ? 'Already have an account?' : 'Remembered your password?'}</Text><Pressable accessibilityRole="button" disabled={busy} onPress={() => { change(mode === 'signin' ? 'signup' : 'signin'); if (mode === 'reset') onLeaveRecoveryRoute?.(); }}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 14 }}>{mode === 'signin' ? 'Create your account' : 'Back to sign in'}</Text></Pressable></View>
       <View style={[ui.row, { justifyContent: 'center', paddingTop: 12 }]}><LockKeyhole size={13} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>Entries stay private until you make them public.</Text></View>
     </View>
   </View><Text style={[ui.muted, { fontSize: 11, textAlign: 'center', marginTop: 32 }]}>MADE FOR THE JOY OF COLLECTING</Text></View><PolicyLinks /></ScrollView></KeyboardAvoidingView></SafeAreaView>;

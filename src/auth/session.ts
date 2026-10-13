@@ -1,8 +1,8 @@
 import { AppState, Platform } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { authStorage, supabase, requireClient } from '../lib/supabase';
-import { isCurrentRecoveryMarker, recoveryMarkerFromStorage, recoveryPageUrl } from './recovery';
+import { isCurrentRecoveryMarker, recoveryLinkFromUrl, recoveryMarkerFromStorage, recoveryPageUrl } from './recovery';
 
 const recoveryMarkerKey = 'collectibles.password-recovery.v1';
 
@@ -18,6 +18,10 @@ function configuredRecoveryUrl() {
   const configured = process.env.EXPO_PUBLIC_WEB_URL?.trim() || (typeof window !== 'undefined' ? window.location.origin : '');
   if (!configured) return undefined;
   try { return recoveryPageUrl(configured); } catch { return undefined; }
+}
+
+function configuredWebUrl() {
+  return process.env.EXPO_PUBLIC_WEB_URL?.trim() || (typeof window !== 'undefined' ? window.location.origin : '');
 }
 
 export function useSession() {
@@ -56,7 +60,15 @@ export function useSession() {
     if (Platform.OS !== 'web') supabase.auth.startAutoRefresh();
     return () => { mounted = false; subscription.unsubscribe(); state.remove(); supabase?.auth.stopAutoRefresh(); };
   }, []);
-  return { session, loading, recovery, finishRecovery: () => { setRecovery(false); void clearRecoveryMarker(); } };
+  const beginPasswordRecovery = useCallback(async (url: string) => {
+    const session = await auth.acceptResetLink(url);
+    if (!session.user.id) throw new Error('This password reset link is invalid or expired. Request a new link.');
+    await markRecovery(session.user.id);
+    setSession(session);
+    setRecovery(true);
+    setLoading(false);
+  }, []);
+  return { session, loading, recovery, beginPasswordRecovery, finishRecovery: () => { setRecovery(false); void clearRecoveryMarker(); } };
 }
 export const auth = {
   async signIn(email: string, password: string, captchaToken?: string) { const { error } = await requireClient().auth.signInWithPassword({ email: email.trim(), password, options: captchaToken ? { captchaToken } : undefined }); if (error) throw error; },
@@ -70,11 +82,15 @@ export const auth = {
     });
     if (error) throw error;
   },
-  async verifyReset(email: string, token: string) {
-    const { data, error } = await requireClient().auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'recovery' });
-    if (error) throw error;
-    if (!data.session?.user.id) throw new Error('Unable to verify this recovery code. Please request a new one.');
-    await markRecovery(data.session.user.id);
+  async acceptResetLink(url: string) {
+    const link = recoveryLinkFromUrl(url, configuredWebUrl());
+    if (!link) throw new Error('This password reset link is invalid or expired. Request a new link.');
+    const result = link.kind === 'code'
+      ? await requireClient().auth.exchangeCodeForSession(link.code)
+      : await requireClient().auth.setSession({ access_token: link.accessToken, refresh_token: link.refreshToken });
+    if (result.error) throw result.error;
+    if (!result.data.session) throw new Error('This password reset link is invalid or expired. Request a new link.');
+    return result.data.session;
   },
   async updatePassword(password: string) { const { error } = await requireClient().auth.updateUser({ password }); if (error) throw error; },
   async signOut() { const { error } = await requireClient().auth.signOut({ scope: 'local' }); if (error) throw error; },

@@ -1,29 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isCurrentRecoveryMarker, normalizeRecoveryCode, recoveryIntentFromUrl, recoveryMarkerFromStorage, recoveryPageUrl, type RecoveryMarker } from '../src/auth/recovery.ts';
+import { isCurrentRecoveryMarker, recoveryIntentFromUrl, recoveryLinkFromUrl, recoveryMarkerFromStorage, recoveryPageUrl, type RecoveryMarker } from '../src/auth/recovery.ts';
 
 const appUrl = 'https://www.sharecollectibles.com';
 
-test('recovery links open the trusted code-request route', () => {
+test('the recovery page opens the trusted reset-link request route', () => {
   assert.equal(recoveryPageUrl(appUrl), 'https://www.sharecollectibles.com/auth/recovery');
-  assert.equal(recoveryIntentFromUrl('https://www.sharecollectibles.com/auth/recovery', appUrl), 'request-code');
-  assert.equal(recoveryIntentFromUrl('https://www.sharecollectibles.com/auth/recovery?ref=email', appUrl), 'request-code');
+  assert.equal(recoveryIntentFromUrl('https://www.sharecollectibles.com/auth/recovery', appUrl), 'request-link');
+  assert.equal(recoveryIntentFromUrl('https://www.sharecollectibles.com/auth/recovery?ref=email', appUrl), 'request-link');
 });
 
-test('legacy recovery links are recognized without accepting their credentials', () => {
-  assert.equal(recoveryIntentFromUrl('https://www.sharecollectibles.com/#access_token=secret&type=recovery', appUrl), 'legacy-link');
-  assert.equal(recoveryIntentFromUrl('https://www.sharecollectibles.com/?type=recovery&token=secret', appUrl), 'legacy-link');
-  assert.equal(recoveryIntentFromUrl('https://evil.example/auth/recovery?type=recovery', appUrl), null);
-  assert.equal(recoveryIntentFromUrl('https://www.sharecollectibles.com/auth/callback?code=oauth-code', appUrl), null);
-});
-
-test('recovery codes preserve leading zeros and reject malformed values before verification', () => {
-  assert.equal(normalizeRecoveryCode(' 001234 '), '001234');
-  assert.equal(normalizeRecoveryCode('1234567890'), '1234567890');
-  assert.equal(normalizeRecoveryCode('12345'), null);
-  assert.equal(normalizeRecoveryCode('12345678901'), null);
-  assert.equal(normalizeRecoveryCode('12 3456'), null);
-  assert.equal(normalizeRecoveryCode('abcdef'), null);
+test('trusted recovery links accept PKCE and legacy credentials without accepting OAuth callbacks', () => {
+  assert.deepEqual(recoveryLinkFromUrl('https://www.sharecollectibles.com/auth/recovery?code=recovery-code', appUrl), { kind: 'code', code: 'recovery-code' });
+  assert.deepEqual(recoveryLinkFromUrl('https://www.sharecollectibles.com/auth/recovery#access_token=access-token&refresh_token=refresh-token&type=recovery', appUrl), { kind: 'tokens', accessToken: 'access-token', refreshToken: 'refresh-token' });
+  assert.equal(recoveryLinkFromUrl('https://evil.example/auth/recovery?code=recovery-code', appUrl), null);
+  assert.equal(recoveryLinkFromUrl('https://www.sharecollectibles.com/auth/callback?code=oauth-code', appUrl), null);
+  assert.equal(recoveryLinkFromUrl('https://www.sharecollectibles.com/auth/recovery?code=invalid%20code', appUrl), null);
 });
 
 test('a saved recovery marker only restores the verified user for one hour', () => {
