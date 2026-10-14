@@ -2,6 +2,7 @@ import { requireClient } from '../lib/supabase';
 import { invalidateSocial } from './events';
 import { socialProfileErrorMessage } from './messages';
 import type { CollectorIdentity, CollectorProfile, CursorPage, LikeState, OwnSocialProfile, PeopleList, Relationship, SharedEntry, SocialCapabilities, SocialRepository, VisibleCollection } from './types';
+import type { EntryPostDate } from '../domain/postDates';
 
 export const disabledSocialCapabilities: SocialCapabilities = {
   profilesEnabled: false,
@@ -70,6 +71,11 @@ function readLikeState(value: unknown): LikeState {
   if (!isRecord(value) || typeof value.count !== 'number' || !Number.isSafeInteger(value.count) || value.count < 0 || typeof value.likedByMe !== 'boolean') throw new Error('Unable to load shared entry. Try again.');
   return { count: value.count, likedByMe: value.likedByMe };
 }
+function readPostDate(value: unknown): EntryPostDate | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value) || (value.kind !== 'acquired' && value.kind !== 'posted' && value.kind !== 'added') || typeof value.value !== 'string' || value.value.length > 64) throw new Error('Unable to load shared entry. Try again.');
+  return { kind: value.kind, value: value.value };
+}
 function readSharedEntry(value: unknown): SharedEntry {
   if (!isRecord(value) || typeof value.id !== 'string' || !UUID.test(value.id) || typeof value.title !== 'string' || typeof value.hasPhoto !== 'boolean' || typeof value.collectionId !== 'string' || !UUID.test(value.collectionId) || typeof value.collectionName !== 'string' || typeof value.publisherId !== 'string' || !UUID.test(value.publisherId) || typeof value.createdAt !== 'string' || (value.audience !== 'public' && value.audience !== 'friends')) throw new Error('Unable to load shared entry. Try again.');
   const creator = readIdentity(value.creator);
@@ -86,6 +92,7 @@ function readSharedEntry(value: unknown): SharedEntry {
     audience: value.audience,
     relationship: readRelationship(value.relationship),
     likes: readLikeState(value.likes),
+    postDate: readPostDate(value.postDate),
   };
 }
 function readSharedPage(value: unknown): CursorPage<SharedEntry> {

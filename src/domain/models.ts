@@ -1,4 +1,5 @@
 import type { CollectorIdentity, LikeState, Relationship, SocialRepository } from '../social/types';
+import type { EntryPostDate } from './postDates';
 
 export type ItemVisibility = 'private' | 'friends' | 'public';
 export type PublicationStatus = 'private' | 'published' | 'review' | 'removed';
@@ -33,6 +34,8 @@ export type Item = {
   title: string;
   notes: string;
   acquired_on: string | null;
+  legacy_post_date?: string | null;
+  posted_at?: string | null;
   created_at: string;
   updated_at: string;
   publication?: { status: PublicationStatus; message: string };
@@ -57,7 +60,7 @@ export type SharedCollectionPage = {
   collection: { id: string; name: string; publisherId?: string };
   scope: { collectionId: string; categoryId: string | null };
   categories: { id: string; name: string }[];
-  items: { id: string; title: string; hasPhoto: boolean; categoryId: string | null; categoryName: string | null }[];
+  items: { id: string; title: string; hasPhoto: boolean; categoryId: string | null; categoryName: string | null; publisherId?: string; creator?: CollectorIdentity; createdAt?: string; audience?: 'public' | 'friends'; relationship?: Relationship; likes?: LikeState; postDate?: EntryPostDate }[];
   total: number;
   hasMore: boolean;
 };
@@ -91,6 +94,7 @@ export type PublicEntryCard = {
   audience?: 'public' | 'friends';
   relationship?: Relationship;
   likes?: LikeState;
+  postDate?: EntryPostDate;
 };
 export type PublicEntryPage = { entries: PublicEntryCard[]; total: number; hasMore: boolean };
 export type PublicTopicDetail = { topic: { key: string; name: string }; entries: PublicEntryCard[]; total: number; hasMore: boolean };

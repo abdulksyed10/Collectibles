@@ -17,6 +17,7 @@ import { useGalleryLayout } from '../components/useGalleryLayout';
 import { EntryMetaRow } from '../components/EntryMetaRow';
 import { EntryViewer } from '../components/EntryViewer';
 import { useSubtleScrollbar } from '../components/scrollbars';
+import { formatEntryPostDate } from '../domain/postDates';
 
 type ExploreView = 'entries' | 'collections';
 type ExploreCard = PublicEntryCard | PublicTopicCard;
@@ -164,7 +165,7 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
     />
     {selectedEntry ? <EntryViewer title={selectedEntry.title} onClose={() => setSelectedEntry(null)} media={style => selectedEntry.hasPhoto ? <Image source={{ uri: demo ? photos[selectedEntry.id]?.url : publicPhotoUrl(selectedEntry.collectionId, selectedEntry.id, 'full') }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selectedEntry.title} onError={() => setFailedPhotos(current => new Set(current).add(selectedEntry.id))} /> : <View style={{ alignItems: 'center', justifyContent: 'center', gap: 10 }}><Package size={44} color={colors.muted} /><Text style={ui.muted}>No photo</Text></View>}>
       <Text style={ui.muted}>{selectedEntry.collectionName}</Text>
-      {socialActions && selectedEntry.creator ? <EntryMetaRow username={selectedEntry.creator.username} onOpenProfile={() => { setSelectedEntry(null); setProfileId(selectedEntry.creator!.publisherId); }}>
+      {socialActions && selectedEntry.creator ? <EntryMetaRow username={selectedEntry.creator.username} onOpenProfile={() => { setSelectedEntry(null); setProfileId(selectedEntry.creator!.publisherId); }} dateText={selectedEntry.postDate ? formatEntryPostDate(selectedEntry.postDate) : undefined}>
         {selectedEntry.likes ? selectedEntry.publisherId === ownPublisherId ? <IconActionButton label={`${selectedEntry.likes.count} ${selectedEntry.likes.count === 1 ? 'like' : 'likes'}`} icon={Heart} count={selectedEntry.likes.count} onPress={() => undefined} disabled /> : <LikeButton variant="compact" itemId={selectedEntry.id} value={selectedEntry.likes} onChanged={likes => updateEntryLikes(selectedEntry.id, likes)} /> : null}
         {selectedEntry.relationship && selectedEntry.creator.publisherId !== ownPublisherId ? <FollowButton variant="compact" collector={{ publisherId: selectedEntry.creator.publisherId, username: selectedEntry.creator.username, relationship: selectedEntry.relationship }} onChanged={relationship => updatePublisherRelationship(selectedEntry.creator!.publisherId, relationship)} /> : null}
       </EntryMetaRow> : null}

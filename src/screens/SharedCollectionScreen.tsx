@@ -11,6 +11,7 @@ import { PublicSafetyControls } from '../components/PublicSafetyControls';
 import { useGalleryLayout } from '../components/useGalleryLayout';
 import { EntryViewer } from '../components/EntryViewer';
 import { useSubtleScrollbar } from '../components/scrollbars';
+import { formatEntryPostDate } from '../domain/postDates';
 
 type SharedItem = SharedCollectionPage['items'][number];
 type Photo = { full: string; thumb: string };
@@ -172,6 +173,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
       ListFooterComponent={hasMore && collection ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} disabled={revalidating} style={{ margin: 8 }} /> : null}
     />
     {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}>
+      {selected.postDate ? <Text style={[ui.muted, { fontSize: 12 }]}>{formatEntryPostDate(selected.postDate)}</Text> : null}
       <PublicSafetyControls repository={repository} collectionId={collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); onBack(); }} />
     </EntryViewer> : null}
   </SafeAreaView>;

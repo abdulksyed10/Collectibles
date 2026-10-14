@@ -1,4 +1,5 @@
 import type { PublicEntryCard } from '../domain/models';
+import type { EntryPostDate } from '../domain/postDates';
 
 export type Relationship = {
   isFollowing: boolean;
@@ -19,6 +20,7 @@ export type SharedEntry = PublicEntryCard & {
   audience: 'public' | 'friends';
   relationship: Relationship;
   likes: LikeState;
+  postDate?: EntryPostDate;
 };
 export type CursorPage<T> = { items: T[]; nextCursor: string | null };
 export type PeopleList = 'following' | 'followers' | 'friends' | 'blocked';
