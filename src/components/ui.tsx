@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
 import { X, type LucideIcon, Layers3 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSubtleScrollbar } from './scrollbars';
 export { colors } from '../theme/theme';
 import { colors } from '../theme/theme';
 export const fonts = { body: 'DMSans_400Regular', medium: 'DMSans_500Medium', bold: 'DMSans_700Bold', heading: 'InstrumentSerif_400Regular' };
@@ -29,7 +30,8 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
 }
 export function ErrorMessage({ message }: { message: string }) { return message ? <Text accessibilityRole="alert" style={ui.error}>{message}</Text> : null; }
 export function Sheet({ title, subtitle, onClose, children, busy = false }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode; busy?: boolean }) {
-  return <Modal visible transparent animationType="fade" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={{ flex: 1, backgroundColor: '#172A2380', alignItems: 'center', justifyContent: 'center', padding: 12 }}><View accessibilityViewIsModal style={{ width: '100%', maxWidth: 530, maxHeight: '96%', backgroundColor: colors.paper, borderRadius: 20 }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18, gap: 16 }}><View style={[ui.row, { justifyContent: 'space-between' }]}><Text style={[ui.title, { fontSize: 30, lineHeight: 34, flex: 1 }]}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close" disabled={busy} onPress={onClose} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={22} color={colors.ink} /></Pressable></View>{subtitle ? <Text style={[ui.muted, { marginTop: -8 }]}>{subtitle}</Text> : null}{children}</ScrollView></View></SafeAreaView></Modal>;
+  const scrollbar = useSubtleScrollbar();
+  return <Modal visible transparent animationType="fade" onRequestClose={() => { if (!busy) onClose(); }}><SafeAreaView style={{ flex: 1, backgroundColor: '#172A2380', alignItems: 'center', justifyContent: 'center', padding: 12 }}><View accessibilityViewIsModal style={{ width: '100%', maxWidth: 530, maxHeight: '96%', backgroundColor: colors.paper, borderRadius: 20 }}><ScrollView {...scrollbar} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18, gap: 16 }}><View style={[ui.row, { justifyContent: 'space-between' }]}><Text style={[ui.title, { fontSize: 30, lineHeight: 34, flex: 1 }]}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close" disabled={busy} onPress={onClose} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={22} color={colors.ink} /></Pressable></View>{subtitle ? <Text style={[ui.muted, { marginTop: -8 }]}>{subtitle}</Text> : null}{children}</ScrollView></View></SafeAreaView></Modal>;
 }
 export function messageOf(error: unknown) {
   if (error instanceof Error) return error.message;

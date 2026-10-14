@@ -12,6 +12,7 @@ import { VisibleCollectionScreen } from './VisibleCollectionScreen';
 import { appendUniqueEntries, createSharedRequestGate } from './sharedLoader';
 import { useRestrictedRevalidation } from './useRestrictedRevalidation';
 import { useGalleryLayout } from '../components/useGalleryLayout';
+import { useSubtleScrollbar } from '../components/scrollbars';
 
 type Props = { onLibrary: () => void; onExplore: () => void; onManagePeople: () => void };
 
@@ -19,6 +20,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
   const repository = useRepository();
   const { width } = useWindowDimensions();
   const { layout, onLayout } = useGalleryLayout();
+  const scrollbar = useSubtleScrollbar();
   const [friendsOnly, setFriendsOnly] = useState(false);
   const [entries, setEntries] = useState<SharedEntry[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
     setCollector(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
   }
   return <View style={{ flex: 1, width: '100%', minWidth: 0 }} onLayout={onLayout}>
-    <FlatList key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 44, flexGrow: 1 }} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => setRevision(value => value + 1)} tintColor={colors.green} />}
+    <FlatList {...scrollbar} key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} style={scrollbar.style} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 44, flexGrow: 1 }} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => setRevision(value => value + 1)} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 14, paddingBottom: 16 }}>
         <View style={{ flexDirection: 'row', gap: 8, borderBottomWidth: 1, borderColor: colors.line }}>
           <Pressable accessibilityRole="button" accessibilityLabel="My collections" onPress={onLibrary} style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: 'center' }}><Text style={{ fontFamily: fonts.medium, color: colors.muted }}>My collections</Text></Pressable>
@@ -84,7 +86,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
       ListEmptyComponent={loading ? <View style={{ padding: 36, alignItems: 'center' }}><ActivityIndicator color={colors.green} /></View> : !error ? <View style={{ alignItems: 'center', padding: 36, gap: 8 }}><Users size={38} color={colors.muted} /><Text style={{ color: colors.ink, fontFamily: fonts.bold }}>Nothing here yet</Text><Text style={[ui.muted, { textAlign: 'center' }]}>Follow collectors to see their public items and Friends-only items from mutual follows.</Text><Button title="Find people" secondary onPress={onManagePeople} /></View> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <SharedEntryDetail entry={selected} collector={collector} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onEntryChanged={updateEntry} onRelationshipChanged={updateRelationship} onReported={refresh} /> : null}
+    {selected ? <SharedEntryDetail entry={selected} collector={collector} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onOpenCollector={() => { setProfileId(selected.publisherId); setSelected(null); }} onEntryChanged={updateEntry} onRelationshipChanged={updateRelationship} onReported={refresh} /> : null}
     {profileId ? <Modal visible animationType="slide" onRequestClose={() => setProfileId(null)}><CollectorProfileScreen publisherId={profileId} onClose={() => setProfileId(null)} /></Modal> : null}
     {collectionId ? <Modal visible animationType="slide" onRequestClose={() => setCollectionId(null)}><VisibleCollectionScreen collectionId={collectionId} onClose={() => setCollectionId(null)} /></Modal> : null}
   </View>;

@@ -6,14 +6,17 @@ import { Image } from 'expo-image';
 import { ArrowLeft, Package } from 'lucide-react-native';
 import type { CollectionRepository, ItemImage, PublicEntryCard } from '../domain/models';
 import { publicPhotoUrl } from '../lib/sharing';
-import { Brand, Button, colors, ErrorMessage, fonts, messageOf, Sheet, ui } from '../components/ui';
+import { Brand, Button, colors, ErrorMessage, fonts, messageOf, ui } from '../components/ui';
 import { useGalleryLayout } from '../components/useGalleryLayout';
+import { EntryViewer } from '../components/EntryViewer';
+import { useSubtleScrollbar } from '../components/scrollbars';
 
 import { PublicSafetyControls } from '../components/PublicSafetyControls';
 type Photo = { full: string; thumb: string };
 
 export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollection, demo = false }: { topicKey: string; repository: CollectionRepository; onBack: () => void; onOpenCollection: (collectionId: string) => void; demo?: boolean }) {
   const { layout, onLayout } = useGalleryLayout();
+  const scrollbar = useSubtleScrollbar();
   const [name, setName] = useState('');
   const [entries, setEntries] = useState<PublicEntryCard[]>([]);
   const [photos, setPhotos] = useState<Record<string, Photo>>({});
@@ -65,12 +68,12 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
   function photoFailed(id: string) { setFailedPhotos(current => new Set(current).add(id)); }
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onBack} /><Brand small /></View>
-    <FlatList key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 32, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
+    <FlatList {...scrollbar} key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} style={scrollbar.style} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 32, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 8, padding: 8, paddingBottom: 20 }}><Text style={[ui.muted, { fontSize: 13 }]}>Explore collection</Text><Text style={{ fontFamily: fonts.bold, fontSize: 26, color: colors.ink }}>{name || 'Collection'}</Text>{total ? <Text style={ui.muted}>{total} {total === 1 ? 'item' : 'items'} from similarly named collections</Text> : null}<ErrorMessage message={error} />{error ? <Button title="Try again" secondary onPress={refresh} /> : null}</View>}
       renderItem={({ item }) => <View style={{ width: layout.cardWidth, marginBottom: layout.gap }}><Pressable accessibilityRole="button" accessibilityLabel={`View ${item.title}`} onPress={() => setSelected(item)} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' }}><View style={{ aspectRatio: 1, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}>{photos[item.id] && !failedPhotos.has(item.id) ? <Image key={`${item.id}-${revision}`} source={{ uri: photos[item.id]!.thumb }} cachePolicy="none" accessibilityLabel={item.title} style={{ width: '100%', height: '100%' }} contentFit="cover" onError={() => photoFailed(item.id)} /> : <Package size={32} color={colors.muted} />}</View><View style={{ padding: 12, gap: 3 }}><Text numberOfLines={2} style={{ fontFamily: fonts.medium, color: colors.ink }}>{item.title}</Text><Text numberOfLines={1} style={[ui.muted, { fontSize: 12 }]}>{item.collectionName}</Text></View></Pressable></View>}
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : null}
       ListFooterComponent={hasMore ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <Sheet title={selected.title} onClose={() => setSelected(null)}>{photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}<Text style={ui.muted}>{selected.collectionName}</Text><Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /><PublicSafetyControls repository={repository} collectionId={selected.collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); refresh(); }} /></Sheet> : null}
+    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}><Text style={ui.muted}>{selected.collectionName}</Text><Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /><PublicSafetyControls repository={repository} collectionId={selected.collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); refresh(); }} /></EntryViewer> : null}
   </SafeAreaView>;
 }

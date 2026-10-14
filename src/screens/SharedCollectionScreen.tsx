@@ -6,15 +6,18 @@ import { Image } from 'expo-image';
 import { ArrowLeft, Package } from 'lucide-react-native';
 import type { CollectionRepository, SharedCollectionPage } from '../domain/models';
 import { publicPhotoUrl } from '../lib/sharing';
-import { Brand, Button, colors, ErrorMessage, fonts, messageOf, Sheet, ui } from '../components/ui';
+import { Brand, Button, colors, ErrorMessage, fonts, messageOf, ui } from '../components/ui';
 import { PublicSafetyControls } from '../components/PublicSafetyControls';
 import { useGalleryLayout } from '../components/useGalleryLayout';
+import { EntryViewer } from '../components/EntryViewer';
+import { useSubtleScrollbar } from '../components/scrollbars';
 
 type SharedItem = SharedCollectionPage['items'][number];
 type Photo = { full: string; thumb: string };
 
 export function SharedCollectionScreen({ collectionId, repository, onBack, demo = false }: { collectionId: string; repository: CollectionRepository; onBack: () => void; demo?: boolean }) {
   const { layout, onLayout } = useGalleryLayout();
+  const scrollbar = useSubtleScrollbar();
   const [collection, setCollection] = useState<SharedCollectionPage['collection'] | null>(null);
   const [items, setItems] = useState<SharedItem[]>([]);
   const [photos, setPhotos] = useState<Record<string, Photo>>({});
@@ -145,7 +148,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}>
       <Button title="Back" icon={ArrowLeft} secondary onPress={onBack} /><Brand small />
     </View>
-    <FlatList key={layout.columns} data={items} keyExtractor={item => item.id} numColumns={layout.columns} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 32, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
+    <FlatList {...scrollbar} key={layout.columns} data={items} keyExtractor={item => item.id} numColumns={layout.columns} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} style={[{ flex: 1 }, scrollbar.style]} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 32, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 12, padding: 8, paddingBottom: 20 }}>
         {demo ? <Text style={[ui.muted, { fontSize: 12 }]}>Shared view preview · Demo only</Text> : null}
         {collection ? <>
@@ -168,9 +171,8 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : collection && !error ? <Text style={[ui.muted, { padding: 8 }]}>No items.</Text> : null}
       ListFooterComponent={hasMore && collection ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} disabled={revalidating} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <Sheet title={selected.title} onClose={() => setSelected(null)}>
-      {photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={{ width: '100%', aspectRatio: 1 }} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}
+    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}>
       <PublicSafetyControls repository={repository} collectionId={collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); onBack(); }} />
-    </Sheet> : null}
+    </EntryViewer> : null}
   </SafeAreaView>;
 }
