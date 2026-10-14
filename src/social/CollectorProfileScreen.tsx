@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, RefreshControl, Text, View } from 'react-native';
 import { ArrowLeft, UserRound } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, colors, ErrorMessage, fonts, ui } from '../components/ui';
@@ -13,12 +13,12 @@ import type { CollectorProfile, SharedEntry } from './types';
 import { useRestrictedRevalidation } from './useRestrictedRevalidation';
 import { VisibleCollectionScreen } from './VisibleCollectionScreen';
 import { useSocialProfile } from './SocialProfileProvider';
+import { useGalleryLayout } from '../components/useGalleryLayout';
 
 export function CollectorProfileScreen({ publisherId, onClose, onSignIn }: { publisherId: string; onClose: () => void; onSignIn?: () => void }) {
   const repository = useRepository();
   const social = useSocialProfile();
-  const { width } = useWindowDimensions();
-  const columns = width >= 1000 ? 4 : width >= 650 ? 3 : 2;
+  const { layout, onLayout } = useGalleryLayout();
   const [profile, setProfile] = useState<CollectorProfile | null>(null);
   const [entries, setEntries] = useState<SharedEntry[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -68,11 +68,11 @@ export function CollectorProfileScreen({ publisherId, onClose, onSignIn }: { pub
     setSelected(current => current?.id === next.id ? next : current);
   }
   const handle = profile?.username ?? 'collector';
-  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
+  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onClose} />{onSignIn ? <Button title="Sign in" secondary onPress={onSignIn} /> : null}</View>
-    <FlatList key={columns} data={entries} keyExtractor={entry => entry.id} numColumns={columns} contentContainerStyle={{ padding: width >= 900 ? 32 : 16, flexGrow: 1, paddingBottom: 40 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
+    <FlatList key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 40, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 12, paddingBottom: 18 }}><View style={[ui.row, { gap: 12 }]}><View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: colors.green, fontFamily: fonts.bold, fontSize: 20 }}>{handle[0]?.toUpperCase() ?? 'C'}</Text></View><View><Text style={[ui.title, { fontSize: 30 }]}>@{handle}</Text><Text style={ui.muted}>Collector</Text></View></View>{profile && profile.publisherId !== social.profile?.publisherId ? <FollowButton collector={profile} onChanged={relationship => setProfile(current => current ? { ...current, relationship } : current)} onSignIn={onSignIn} /> : null}<ErrorMessage message={error} />{error ? <Button title="Try again" secondary onPress={refresh} /> : null}</View>}
-      renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 7 }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onLikeChanged={updateEntry} onSignIn={onSignIn} /></View>}
+      renderItem={({ item }) => <View style={{ width: layout.cardWidth, marginBottom: layout.gap }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onLikeChanged={updateEntry} onSignIn={onSignIn} /></View>}
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 30 }} /> : !error ? <View style={{ alignItems: 'center', padding: 30, gap: 8 }}><UserRound size={38} color={colors.muted} /><Text style={ui.muted}>No shared items to show.</Text></View> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />

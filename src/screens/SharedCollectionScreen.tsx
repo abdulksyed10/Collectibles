@@ -1,6 +1,6 @@
 import { onPublicPreferencesChange } from '../lib/publisherPreferences';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, FlatList, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { ArrowLeft, Package } from 'lucide-react-native';
@@ -8,13 +8,13 @@ import type { CollectionRepository, SharedCollectionPage } from '../domain/model
 import { publicPhotoUrl } from '../lib/sharing';
 import { Brand, Button, colors, ErrorMessage, fonts, messageOf, Sheet, ui } from '../components/ui';
 import { PublicSafetyControls } from '../components/PublicSafetyControls';
+import { useGalleryLayout } from '../components/useGalleryLayout';
 
 type SharedItem = SharedCollectionPage['items'][number];
 type Photo = { full: string; thumb: string };
 
 export function SharedCollectionScreen({ collectionId, repository, onBack, demo = false }: { collectionId: string; repository: CollectionRepository; onBack: () => void; demo?: boolean }) {
-  const { width } = useWindowDimensions();
-  const columns = width >= 1100 ? 4 : width >= 650 ? 3 : 2;
+  const { layout, onLayout } = useGalleryLayout();
   const [collection, setCollection] = useState<SharedCollectionPage['collection'] | null>(null);
   const [items, setItems] = useState<SharedItem[]>([]);
   const [photos, setPhotos] = useState<Record<string, Photo>>({});
@@ -141,11 +141,11 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
   }
 
   function photoFailed(id: string) { setFailedPhotos(current => new Set(current).add(id)); }
-  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }}>
+  return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}>
       <Button title="Back" icon={ArrowLeft} secondary onPress={onBack} /><Brand small />
     </View>
-    <FlatList key={columns} data={items} keyExtractor={item => item.id} numColumns={columns} style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: 32, width: '100%', maxWidth: 1200, alignSelf: 'center' }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
+    <FlatList key={layout.columns} data={items} keyExtractor={item => item.id} numColumns={layout.columns} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 32, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 12, padding: 8, paddingBottom: 20 }}>
         {demo ? <Text style={[ui.muted, { fontSize: 12 }]}>Shared view preview · Demo only</Text> : null}
         {collection ? <>
@@ -157,7 +157,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
         <ErrorMessage message={error} />
         {error ? <Button title="Try again" secondary onPress={refresh} /> : null}
       </View>}
-      renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 6 }}>
+      renderItem={({ item }) => <View style={{ width: layout.cardWidth, marginBottom: layout.gap }}>
         <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.title}`} onPress={() => setSelected(item)} style={{ backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' }}>
           <View style={{ aspectRatio: 1, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center' }}>
             {photos[item.id] && !failedPhotos.has(item.id) ? <Image key={`${item.id}-${revision}`} source={{ uri: photos[item.id]!.thumb }} cachePolicy="none" accessibilityLabel={item.title} style={{ width: '100%', height: '100%' }} contentFit="cover" onError={() => photoFailed(item.id)} /> : <View style={{ alignItems: 'center', gap: 8 }}><Package size={32} color={colors.muted} /><Text style={[ui.muted, { fontSize: 12 }]}>{item.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text></View>}

@@ -207,6 +207,23 @@ test('demo stays local and uses the collection-first navigation on mobile', asyn
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
 
+test('desktop galleries fill their measured pane and keep collections available in Explore', async ({ page }) => {
+  test.skip(process.env.PLAYWRIGHT_BACKEND_FIXTURE !== 'true', 'Requires fixture backend export.');
+  await fakeBackend(page); await page.setViewportSize({ width: 1600, height: 900 }); await page.goto('/'); await signIn(page);
+  for (let index = 1; index <= 5; index++) {
+    await page.getByRole('button', { name: 'Add item', exact: true }).first().click();
+    await page.getByLabel('Item name').fill(`Desktop entry ${index}`);
+    const acceptance = page.getByRole('checkbox', { name: 'Agree to Terms and Community rules' });
+    if (await acceptance.isVisible()) await acceptance.click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Add item', exact: true }).click();
+  }
+  await expect(page.getByRole('button', { name: 'Open Desktop entry 5', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'All collections', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Explore', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'All collections', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+});
+
 test('dark storefront keeps the promotional panel behind its light heading dark', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('collectibles.theme-preference', 'dark'));
   await page.setViewportSize({ width: 1280, height: 900 });

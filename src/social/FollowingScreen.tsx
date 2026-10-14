@@ -11,13 +11,14 @@ import type { CollectorProfile, Relationship, SharedEntry } from './types';
 import { VisibleCollectionScreen } from './VisibleCollectionScreen';
 import { appendUniqueEntries, createSharedRequestGate } from './sharedLoader';
 import { useRestrictedRevalidation } from './useRestrictedRevalidation';
+import { useGalleryLayout } from '../components/useGalleryLayout';
 
 type Props = { onLibrary: () => void; onExplore: () => void; onManagePeople: () => void };
 
 export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props) {
   const repository = useRepository();
   const { width } = useWindowDimensions();
-  const columns = width >= 1100 ? 4 : width >= 650 ? 3 : 2;
+  const { layout, onLayout } = useGalleryLayout();
   const [friendsOnly, setFriendsOnly] = useState(false);
   const [entries, setEntries] = useState<SharedEntry[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -67,8 +68,8 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
     setSelected(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
     setCollector(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
   }
-  return <View style={{ flex: 1, width: '100%', maxWidth: 1200, alignSelf: 'center' }}>
-    <FlatList key={columns} data={entries} keyExtractor={entry => entry.id} numColumns={columns} contentContainerStyle={{ padding: width >= 900 ? 32 : 16, paddingBottom: 44, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => setRevision(value => value + 1)} tintColor={colors.green} />}
+  return <View style={{ flex: 1, width: '100%', minWidth: 0 }} onLayout={onLayout}>
+    <FlatList key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 44, flexGrow: 1 }} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => setRevision(value => value + 1)} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 14, paddingBottom: 16 }}>
         <View style={{ flexDirection: 'row', gap: 8, borderBottomWidth: 1, borderColor: colors.line }}>
           <Pressable accessibilityRole="button" accessibilityLabel="My collections" onPress={onLibrary} style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: 'center' }}><Text style={{ fontFamily: fonts.medium, color: colors.muted }}>My collections</Text></Pressable>
@@ -79,7 +80,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
         <View style={{ flexDirection: 'row', gap: 8 }}><Button title="All following" secondary={friendsOnly} onPress={() => setFriendsOnly(false)} /><Button title="Friends only" secondary={!friendsOnly} onPress={() => setFriendsOnly(true)} /></View>
         <ErrorMessage message={error} />{error ? <Button title="Try again" secondary onPress={() => setRevision(value => value + 1)} /> : null}
       </View>}
-      renderItem={({ item }) => <View style={{ width: `${100 / columns}%`, padding: 7 }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onOpenCollector={() => setProfileId(item.publisherId)} onLikeChanged={updateEntry} onRelationshipChanged={updateRelationship} /></View>}
+      renderItem={({ item }) => <View style={{ width: layout.cardWidth, marginBottom: layout.gap }}><SharedEntryCard entry={item} accessRevision={revision} onOpen={() => setSelected(item)} onOpenCollector={() => setProfileId(item.publisherId)} onLikeChanged={updateEntry} onRelationshipChanged={updateRelationship} /></View>}
       ListEmptyComponent={loading ? <View style={{ padding: 36, alignItems: 'center' }}><ActivityIndicator color={colors.green} /></View> : !error ? <View style={{ alignItems: 'center', padding: 36, gap: 8 }}><Users size={38} color={colors.muted} /><Text style={{ color: colors.ink, fontFamily: fonts.bold }}>Nothing here yet</Text><Text style={[ui.muted, { textAlign: 'center' }]}>Follow collectors to see their public items and Friends-only items from mutual follows.</Text><Button title="Find people" secondary onPress={onManagePeople} /></View> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
