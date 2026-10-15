@@ -6,6 +6,7 @@ import { Button, colors, fonts, ui } from './ui';
 import { getEntryViewerMediaHeight } from './entryViewerLayout';
 import { useSubtleScrollbar } from './scrollbars';
 import { EntrySwipeSurface } from './EntrySwipeSurface';
+import { useEntryViewerKeyboard } from './entryViewerKeyboard';
 
 export type EntryViewerNavigation = {
   canPrevious: boolean;
@@ -28,6 +29,7 @@ export function EntryViewer({ title, media, onClose, children, navigation }: Pro
   const { height } = useWindowDimensions();
   const scrollbar = useSubtleScrollbar();
   const mediaHeight = getEntryViewerMediaHeight(height);
+  useEntryViewerKeyboard(onClose, navigation);
   return <Modal visible transparent animationType="fade" onRequestClose={onClose}>
     <SafeAreaView style={{ flex: 1, backgroundColor: '#172A2380', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
       <View accessibilityViewIsModal style={{ width: '100%', maxWidth: 760, maxHeight: '96%', backgroundColor: colors.paper, borderRadius: 20, overflow: 'hidden' }}>
