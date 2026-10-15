@@ -5,8 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, colors, fonts, ui } from './ui';
 import { getEntryViewerMediaHeight } from './entryViewerLayout';
 import { useSubtleScrollbar } from './scrollbars';
+import { EntrySwipeSurface } from './EntrySwipeSurface';
 
-type Navigation = {
+export type EntryViewerNavigation = {
   canPrevious: boolean;
   canNext: boolean;
   busy?: boolean;
@@ -19,7 +20,7 @@ type Props = {
   media: (style: ImageStyle) => React.ReactNode;
   onClose: () => void;
   children: React.ReactNode;
-  navigation?: Navigation;
+  navigation?: EntryViewerNavigation;
 };
 
 /** Dedicated entry modal: header stays reachable while media and metadata scroll. */
@@ -35,7 +36,7 @@ export function EntryViewer({ title, media, onClose, children, navigation }: Pro
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={22} color={colors.ink} /></Pressable>
         </View>
         <ScrollView {...scrollbar} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 18, gap: 16 }}>
-          <View style={{ height: mediaHeight, backgroundColor: colors.pale, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>{media({ width: '100%', height: '100%' })}</View>
+          <EntrySwipeSurface style={{ height: mediaHeight, backgroundColor: colors.pale, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }} onPrevious={navigation?.canPrevious ? navigation.onPrevious : undefined} onNext={navigation?.canNext ? navigation.onNext : undefined}>{media({ width: '100%', height: '100%' })}</EntrySwipeSurface>
           {children}
         </ScrollView>
         {navigation ? <View style={{ padding: 12, borderTopWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 8 }}>

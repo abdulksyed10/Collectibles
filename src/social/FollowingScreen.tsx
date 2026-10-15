@@ -13,6 +13,7 @@ import { appendUniqueEntries, createSharedRequestGate } from './sharedLoader';
 import { useRestrictedRevalidation } from './useRestrictedRevalidation';
 import { useGalleryLayout } from '../components/useGalleryLayout';
 import { useSubtleScrollbar } from '../components/scrollbars';
+import { useEntryNavigation } from '../components/useEntryNavigation';
 
 type Props = { onLibrary: () => void; onExplore: () => void; onManagePeople: () => void };
 
@@ -32,6 +33,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
   const [collector, setCollector] = useState<CollectorProfile | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
+  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected);
   const requests = useRef(createSharedRequestGate());
   const refresh = useCallback(() => setRevision(value => value + 1), []);
   useEffect(() => subscribeSocialInvalidation(reason => { if (reason !== 'like') refresh(); }), [refresh]);
@@ -86,7 +88,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
       ListEmptyComponent={loading ? <View style={{ padding: 36, alignItems: 'center' }}><ActivityIndicator color={colors.green} /></View> : !error ? <View style={{ alignItems: 'center', padding: 36, gap: 8 }}><Users size={38} color={colors.muted} /><Text style={{ color: colors.ink, fontFamily: fonts.bold }}>Nothing here yet</Text><Text style={[ui.muted, { textAlign: 'center' }]}>Follow collectors to see their public items and Friends-only items from mutual follows.</Text><Button title="Find people" secondary onPress={onManagePeople} /></View> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <SharedEntryDetail entry={selected} collector={collector} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onOpenCollector={() => { setProfileId(selected.publisherId); setSelected(null); }} onEntryChanged={updateEntry} onRelationshipChanged={updateRelationship} onReported={refresh} /> : null}
+    {selected ? <SharedEntryDetail entry={selected} collector={collector} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => { setCollectionId(selected.collectionId); setSelected(null); }} onOpenCollector={() => { setProfileId(selected.publisherId); setSelected(null); }} navigation={selectedNavigation} onEntryChanged={updateEntry} onRelationshipChanged={updateRelationship} onReported={refresh} /> : null}
     {profileId ? <Modal visible animationType="slide" onRequestClose={() => setProfileId(null)}><CollectorProfileScreen publisherId={profileId} onClose={() => setProfileId(null)} /></Modal> : null}
     {collectionId ? <Modal visible animationType="slide" onRequestClose={() => setCollectionId(null)}><VisibleCollectionScreen collectionId={collectionId} onClose={() => setCollectionId(null)} /></Modal> : null}
   </View>;

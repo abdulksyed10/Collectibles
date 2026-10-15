@@ -9,6 +9,7 @@ import { publicPhotoUrl } from '../lib/sharing';
 import { Brand, Button, colors, ErrorMessage, fonts, messageOf, ui } from '../components/ui';
 import { useGalleryLayout } from '../components/useGalleryLayout';
 import { EntryViewer } from '../components/EntryViewer';
+import { useEntryNavigation } from '../components/useEntryNavigation';
 import { useSubtleScrollbar } from '../components/scrollbars';
 import { formatEntryPostDate } from '../domain/postDates';
 
@@ -22,6 +23,7 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
   const [entries, setEntries] = useState<PublicEntryCard[]>([]);
   const [photos, setPhotos] = useState<Record<string, Photo>>({});
   const [selected, setSelected] = useState<PublicEntryCard | null>(null);
+  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected);
   const [loading, setLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -75,6 +77,6 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : null}
       ListFooterComponent={hasMore ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}><Text style={ui.muted}>{selected.collectionName}</Text>{selected.postDate ? <Text style={[ui.muted, { fontSize: 12 }]}>{formatEntryPostDate(selected.postDate)}</Text> : null}<Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /><PublicSafetyControls repository={repository} collectionId={selected.collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); refresh(); }} /></EntryViewer> : null}
+    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} navigation={selectedNavigation} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}><Text style={ui.muted}>{selected.collectionName}</Text>{selected.postDate ? <Text style={[ui.muted, { fontSize: 12 }]}>{formatEntryPostDate(selected.postDate)}</Text> : null}<Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /><PublicSafetyControls repository={repository} collectionId={selected.collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); refresh(); }} /></EntryViewer> : null}
   </SafeAreaView>;
 }

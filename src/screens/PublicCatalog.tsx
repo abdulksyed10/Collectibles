@@ -16,6 +16,7 @@ import { PostCard } from '../components/PostCard';
 import { useGalleryLayout } from '../components/useGalleryLayout';
 import { EntryMetaRow } from '../components/EntryMetaRow';
 import { EntryViewer } from '../components/EntryViewer';
+import { useEntryNavigation } from '../components/useEntryNavigation';
 import { useSubtleScrollbar } from '../components/scrollbars';
 import { formatEntryPostDate } from '../domain/postDates';
 
@@ -43,6 +44,7 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
   const [error, setError] = useState('');
   const [failedPhotos, setFailedPhotos] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<PublicEntryCard | null>(null);
+  const selectedNavigation = useEntryNavigation(cards.filter(isEntry), selectedEntry?.id, setSelectedEntry);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const pageRef = useRef(0);
@@ -163,7 +165,7 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
       ListEmptyComponent={loading ? <View style={{ alignItems: 'center', padding: 36 }}><ActivityIndicator color={colors.green} /></View> : !error ? <View style={{ alignItems: 'center', padding: 36, gap: 9 }}><Package size={36} color={colors.muted} strokeWidth={1.2} /><Text style={{ color: colors.ink, fontFamily: fonts.bold }}>Nothing shared yet</Text><Text style={ui.muted}>Check back after collectors share entries.</Text></View> : null}
       ListFooterComponent={hasMore ? <Button title={`Load more ${viewTitle.toLowerCase()}`} secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selectedEntry ? <EntryViewer title={selectedEntry.title} onClose={() => setSelectedEntry(null)} media={style => selectedEntry.hasPhoto ? <Image source={{ uri: demo ? photos[selectedEntry.id]?.url : publicPhotoUrl(selectedEntry.collectionId, selectedEntry.id, 'full') }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selectedEntry.title} onError={() => setFailedPhotos(current => new Set(current).add(selectedEntry.id))} /> : <View style={{ alignItems: 'center', justifyContent: 'center', gap: 10 }}><Package size={44} color={colors.muted} /><Text style={ui.muted}>No photo</Text></View>}>
+    {selectedEntry ? <EntryViewer title={selectedEntry.title} onClose={() => setSelectedEntry(null)} navigation={selectedNavigation} media={style => selectedEntry.hasPhoto ? <Image source={{ uri: demo ? photos[selectedEntry.id]?.url : publicPhotoUrl(selectedEntry.collectionId, selectedEntry.id, 'full') }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selectedEntry.title} onError={() => setFailedPhotos(current => new Set(current).add(selectedEntry.id))} /> : <View style={{ alignItems: 'center', justifyContent: 'center', gap: 10 }}><Package size={44} color={colors.muted} /><Text style={ui.muted}>No photo</Text></View>}>
       <Text style={ui.muted}>{selectedEntry.collectionName}</Text>
       {socialActions && selectedEntry.creator ? <EntryMetaRow username={selectedEntry.creator.username} onOpenProfile={() => { setSelectedEntry(null); setProfileId(selectedEntry.creator!.publisherId); }} dateText={selectedEntry.postDate ? formatEntryPostDate(selectedEntry.postDate) : undefined}>
         {selectedEntry.likes ? selectedEntry.publisherId === ownPublisherId ? <IconActionButton label={`${selectedEntry.likes.count} ${selectedEntry.likes.count === 1 ? 'like' : 'likes'}`} icon={Heart} count={selectedEntry.likes.count} onPress={() => undefined} disabled /> : <LikeButton variant="compact" itemId={selectedEntry.id} value={selectedEntry.likes} onChanged={likes => updateEntryLikes(selectedEntry.id, likes)} /> : null}

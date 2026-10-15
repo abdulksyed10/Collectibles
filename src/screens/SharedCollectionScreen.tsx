@@ -10,6 +10,7 @@ import { Brand, Button, colors, ErrorMessage, fonts, messageOf, ui } from '../co
 import { PublicSafetyControls } from '../components/PublicSafetyControls';
 import { useGalleryLayout } from '../components/useGalleryLayout';
 import { EntryViewer } from '../components/EntryViewer';
+import { useEntryNavigation } from '../components/useEntryNavigation';
 import { useSubtleScrollbar } from '../components/scrollbars';
 import { formatEntryPostDate } from '../domain/postDates';
 
@@ -28,6 +29,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
   const [total, setTotal] = useState(0);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<SharedItem | null>(null);
+  const selectedNavigation = useEntryNavigation(items, selected?.id, setSelected);
   const [failedPhotos, setFailedPhotos] = useState<Set<string>>(new Set());
   const [revision, setRevision] = useState(0);
   const [revalidating, setRevalidating] = useState(false);
@@ -172,7 +174,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : collection && !error ? <Text style={[ui.muted, { padding: 8 }]}>No items.</Text> : null}
       ListFooterComponent={hasMore && collection ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} disabled={revalidating} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}>
+    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} navigation={selectedNavigation} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}>
       {selected.postDate ? <Text style={[ui.muted, { fontSize: 12 }]}>{formatEntryPostDate(selected.postDate)}</Text> : null}
       <PublicSafetyControls repository={repository} collectionId={collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); onBack(); }} />
     </EntryViewer> : null}

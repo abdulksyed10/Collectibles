@@ -15,6 +15,7 @@ import { useSocialProfile } from './SocialProfileProvider';
 import { useRestrictedRevalidation } from './useRestrictedRevalidation';
 import { useGalleryLayout } from '../components/useGalleryLayout';
 import { useSubtleScrollbar } from '../components/scrollbars';
+import { useEntryNavigation } from '../components/useEntryNavigation';
 
 export function VisibleCollectionScreen({ collectionId, onClose, onSignIn }: { collectionId: string; onClose: () => void; onSignIn?: () => void }) {
   const repository = useRepository();
@@ -79,6 +80,7 @@ export function VisibleCollectionScreen({ collectionId, onClose, onSignIn }: { c
     setOwner(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
   }
   const entries = data?.entries.items ?? [];
+  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected);
   const cursor = data?.entries.nextCursor ?? null;
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, borderBottomWidth: 1, borderColor: colors.line }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onClose} /></View>
@@ -88,7 +90,7 @@ export function VisibleCollectionScreen({ collectionId, onClose, onSignIn }: { c
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 30 }} /> : null}
       ListFooterComponent={cursor ? <Button title="Load more" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <SharedEntryDetail entry={selected} collector={owner} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => undefined} onOpenCollector={() => { setProfileId(selected.publisherId); setSelected(null); }} showCollectionButton={false} onEntryChanged={updateEntry} onRelationshipChanged={updateRelationship} onReported={refresh} onBlocked={onClose} onSignIn={onSignIn} /> : null}
+    {selected ? <SharedEntryDetail entry={selected} collector={owner} accessRevision={revision} onClose={() => setSelected(null)} onOpenCollection={() => undefined} onOpenCollector={() => { setProfileId(selected.publisherId); setSelected(null); }} navigation={selectedNavigation} showCollectionButton={false} onEntryChanged={updateEntry} onRelationshipChanged={updateRelationship} onReported={refresh} onBlocked={onClose} onSignIn={onSignIn} /> : null}
     {profileId ? <Modal visible animationType="slide" onRequestClose={() => setProfileId(null)}><CollectorProfileScreen publisherId={profileId} onClose={() => setProfileId(null)} onSignIn={onSignIn} /></Modal> : null}
   </SafeAreaView>;
 }
