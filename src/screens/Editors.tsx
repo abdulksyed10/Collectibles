@@ -1,14 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Camera, Check, ImagePlus, Plus, Trash2 } from 'lucide-react-native';
 import { Image } from 'expo-image';
-import type { Category, Collection, Item, ItemImage, ItemVisibility, PreparedPhoto } from '../domain/models';
+import type { Category, Collection, Item, ItemDraft, ItemImage, ItemVisibility, PreparedPhoto } from '../domain/models';
 import { useRepository } from '../data/RepositoryProvider';
-import { pickPhoto } from '../lib/photos';
+import { pickPhoto, preparePhoto, selectPhotoAssets } from '../lib/photos';
 import { validateAcquiredDate } from '../domain/dates';
 import { confirmPhotoUpload, initialItemAcquiredOn, savedItemPlacement } from '../domain/itemPhoto';
 import { AcquiredDateField } from '../components/AcquiredDateField';
 import { Button, colors, ErrorMessage, Field, fonts, messageOf, Sheet, ui } from '../components/ui';
+import { PhotoSelectionQueue } from '../components/PhotoSelectionQueue';
+import { appendUploadJobs, draftForSavedPlacement, type BatchUploadJob } from '../domain/batchUpload';
+import { MAX_PHOTO_SELECTION } from '../domain/photoSelection';
+import * as Crypto from 'expo-crypto';
 
 import { useContributionPolicy } from '../components/ContributionPolicy';
 import { useSocialProfile } from '../social/SocialProfileProvider';
@@ -84,13 +88,28 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
   const [visibility, setVisibility] = useState<ItemVisibility>(item?.visibility ?? 'private');
   const [acquiredOn, setAcquiredOn] = useState<string | null>(initialItemAcquiredOn(item));
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null); const [savedId, setSavedId] = useState(item?.id);
+  const [jobs, setJobs] = useState<BatchUploadJob[]>([]);
+  const [frozenDraft, setFrozenDraft] = useState<ItemDraft | null>(null);
+  const stopRequested = useRef(false);
   const [busy, setBusy] = useState(false); const [picking, setPicking] = useState(false); const [error, setError] = useState('');
   const [collectionChoices, setCollectionChoices] = useState<CollectionChoice[]>(() => collections.map(collection => ({ id: collection.id, name: collection.name })));
   const [categoryChoices, setCategoryChoices] = useState<CategoryChoice[]>(() => categories.map(category => ({ id: category.id, name: category.name, collection_id: category.collection_id })));
   useEffect(() => { setCollectionChoices(current => mergeChoices(current, collections.map(collection => ({ id: collection.id, name: collection.name })))); }, [collections]);
   useEffect(() => { setCategoryChoices(current => mergeChoices(current, categories.map(category => ({ id: category.id, name: category.name, collection_id: category.collection_id })))); }, [categories]);
   const selectedCategories = useMemo(() => categoryChoices.filter(category => category.collection_id === collectionId), [categoryChoices, collectionId]);
-  async function choose(camera: boolean) { setError(''); setPicking(true); try { const next = await pickPhoto(camera); if (next) setPhoto(next); } catch (reason) { setError(messageOf(reason)); } finally { setPicking(false); } }
+  async function choose(camera: boolean) {
+    setError(''); setPicking(true);
+    try {
+      if (item) {
+        const next = await pickPhoto(camera);
+        if (next) setPhoto(next);
+      } else {
+        const assets = await selectPhotoAssets({ camera, remaining: MAX_PHOTO_SELECTION - jobs.length });
+        if (assets.length) setJobs(current => appendUploadJobs(current, assets, Crypto.randomUUID));
+      }
+    } catch (reason) { setError(messageOf(reason)); }
+    finally { setPicking(false); }
+  }
   function chooseCollection(id: string) {
     if (id === '__new_collection__') { setCollectionId(''); setCreatingCollection(true); setCategoryId(''); return; }
     setCollectionId(id); setCreatingCollection(false);
@@ -100,23 +119,29 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     if (id === '__new_category__') { setCategoryId(''); setCreatingCategory(true); return; }
     setCategoryId(id); setCreatingCategory(false);
   }
-  async function save() {
-    if (creatingCollection && !newCollectionName.trim()) { setError('Enter a collection name.'); return; }
-    if (creatingCategory && !newCategoryName.trim()) { setError('Enter a category name.'); return; }
-    try { validateAcquiredDate(acquiredOn); } catch (reason) { setError(messageOf(reason)); return; }
-    setBusy(true); setError(''); let metadataSaved = false;
+  function itemDraft(): ItemDraft {
+    return {
+      title, notes,
+      collectionId: collectionId || undefined,
+      newCollectionName: creatingCollection ? newCollectionName : undefined,
+      categoryId: categoryId || null,
+      newCategoryName: creatingCategory ? newCategoryName : undefined,
+      visibility, acquiredOn,
+    };
+  }
+  function validateDraft() {
+    if (creatingCollection && !newCollectionName.trim()) throw new Error('Enter a collection name.');
+    if (creatingCategory && !newCategoryName.trim()) throw new Error('Enter a category name.');
+    validateAcquiredDate(acquiredOn);
+  }
+  function updateJob(jobId: string, change: Partial<BatchUploadJob>) {
+    setJobs(current => current.map(job => job.id === jobId ? { ...job, ...change } : job));
+  }
+  async function saveSingle(draft: ItemDraft) {
+    let metadataSaved = false;
     try {
       await policy.ensure();
-      const saved = await repository.saveItem({
-        title,
-        notes,
-        collectionId: collectionId || undefined,
-        newCollectionName: creatingCollection ? newCollectionName : undefined,
-        categoryId: categoryId || null,
-        newCategoryName: creatingCategory ? newCategoryName : undefined,
-        visibility,
-        acquiredOn,
-      }, savedId);
+      const saved = await repository.saveItem(draft, savedId);
       const placement = savedItemPlacement(saved);
       const createdCollectionName = creatingCollection ? newCollectionName.trim() : collectionChoices.find(collection => collection.id === placement.collectionId)?.name ?? 'General';
       const createdCategoryName = creatingCategory ? newCategoryName.trim() : categoryChoices.find(category => category.id === placement.categoryId)?.name ?? '';
@@ -130,31 +155,105 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
       metadataSaved = true;
       if (photo) await confirmPhotoUpload(repository, placement.id, photo);
       onSaved();
-    } catch (reason) { setError(`${metadataSaved && photo ? 'Your item details are saved. The photo was not confirmed; you can retry or close and check your item. ' : ''}${messageOf(reason)}`); }
+    } catch (reason) {
+      setError(`${metadataSaved && photo ? 'Your item details are saved. The photo was not confirmed; you can retry or close and check your item. ' : ''}${messageOf(reason)}`);
+    }
+  }
+  async function saveBatch(draft: ItemDraft) {
+    await policy.ensure();
+    stopRequested.current = false;
+    let placement: Item | null = null;
+    let failed = 0;
+    // A retry can start after another job already created the shared inline
+    // collection/category. Resolve that placement first so it is never made a
+    // second time just because the first queued file failed locally.
+    for (const existingJob of jobs) {
+      if (!existingJob.itemId) continue;
+      const existing = await repository.readOwnedItem(existingJob.itemId);
+      if (existing) { placement = existing; break; }
+    }
+    for (const startingJob of jobs) {
+      if (startingJob.status === 'saved') continue;
+      if (stopRequested.current) {
+        updateJob(startingJob.id, { status: 'paused' });
+        continue;
+      }
+      let job = startingJob;
+      try {
+        const effectiveDraft = placement ? draftForSavedPlacement(draft, placement) : draft;
+        updateJob(job.id, { status: 'preparing', error: undefined });
+        const prepared = await preparePhoto(job.asset as Parameters<typeof preparePhoto>[0]);
+        let saved: Item;
+        if (job.itemId) {
+          updateJob(job.id, { status: 'creating' });
+          const existing = await repository.readOwnedItem(job.itemId);
+          if (!existing) throw new Error('This upload draft is no longer available. It cannot be recreated automatically.');
+          saved = existing;
+        } else {
+          updateJob(job.id, { status: 'creating' });
+          saved = await repository.createUploadDraft(effectiveDraft, job.requestId);
+          job = { ...job, itemId: saved.id };
+          updateJob(job.id, { itemId: saved.id });
+        }
+        placement ??= saved;
+        updateJob(job.id, { status: 'uploading' });
+        await confirmPhotoUpload(repository, saved.id, prepared);
+        if (draft.visibility !== 'private') {
+          updateJob(job.id, { status: 'publishing' });
+          await repository.saveItem(draftForSavedPlacement(draft, saved), saved.id);
+        }
+        updateJob(job.id, { status: 'saved', error: undefined });
+      } catch (reason) {
+        failed += 1;
+        updateJob(job.id, { status: 'failed', error: messageOf(reason) });
+      }
+    }
+    if (failed) {
+      setError(`${jobs.length - failed} saved, ${failed} need attention. Retry failed photos to reuse their saved drafts.`);
+      return;
+    }
+    if (stopRequested.current) { setError('Upload paused. Your completed items are saved.'); return; }
+    onSaved();
+  }
+  async function save() {
+    let draft: ItemDraft;
+    try { validateDraft(); draft = frozenDraft ?? itemDraft(); }
+    catch (reason) { setError(messageOf(reason)); return; }
+    setBusy(true); setError('');
+    try {
+      if (!item && jobs.length) {
+        if (!frozenDraft) setFrozenDraft(draft);
+        await saveBatch(draft);
+      } else await saveSingle(draft);
+    } catch (reason) { setError(messageOf(reason)); }
     finally { setBusy(false); }
   }
-  function close() { if (savedId) onSaved(); else onClose(); }
+  function close() { if (savedId || jobs.some(job => job.itemId)) onSaved(); else onClose(); }
   const collectionOptions = item
     ? collectionChoices
     : [{ id: '', name: 'General', subtitle: 'Created if needed' }, ...collectionChoices, { id: '__new_collection__', name: 'New collection' }];
   const categoryOptions = item
     ? [{ id: '', name: 'No category' }, ...selectedCategories.map(category => ({ id: category.id, name: category.name }))]
     : [{ id: '', name: 'No category' }, ...selectedCategories.map(category => ({ id: category.id, name: category.name })), { id: '__new_category__', name: 'New category' }];
+  const editingLocked = busy || Boolean(frozenDraft);
   return <Sheet title={item ? 'Edit item' : 'Add item'} onClose={close} busy={busy || picking}>
-    <View style={{ backgroundColor: colors.pale, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', minHeight: 170 }}>
+    {!item && jobs.length ? <PhotoSelectionQueue jobs={jobs} onRemove={id => setJobs(current => current.filter(job => job.id !== id))} disabled={editingLocked} /> : <View style={{ backgroundColor: colors.pale, borderRadius: 18, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', minHeight: 170 }}>
       {photo?.uri || image?.url ? <Image source={{ uri: photo?.uri ?? image?.url }} style={{ width: '100%', height: 200 }} contentFit="contain" cachePolicy="memory" accessibilityLabel="Item photo preview" /> : <View style={{ alignItems: 'center', gap: 10, padding: 25 }}><ImagePlus size={35} color={colors.green} strokeWidth={1.4} /><Text style={ui.muted}>No photo</Text></View>}
-    </View>
-    {!image ? <View style={ui.row}><Button title={photo ? 'Choose another' : 'Choose photo'} secondary icon={ImagePlus} onPress={() => { void choose(false); }} disabled={busy || picking} style={{ flex: 1 }} /><Button title="Camera" secondary icon={Camera} onPress={() => { void choose(true); }} disabled={busy || picking} /></View> : null}
-    <Field label="Item name" placeholder="Item name" value={title} onChangeText={setTitle} maxLength={120} editable={!busy} />
-    <Choices label="Collection" options={collectionOptions} value={creatingCollection ? '__new_collection__' : collectionId} onChange={chooseCollection} disabled={busy} />
-    {creatingCollection ? <Field label="New collection name" placeholder="e.g. Bottle caps" value={newCollectionName} onChangeText={setNewCollectionName} maxLength={80} editable={!busy} /> : null}
-    <Choices label="Category" options={categoryOptions} value={creatingCategory ? '__new_category__' : categoryId} onChange={chooseCategory} disabled={busy} />
-    {creatingCategory ? <Field label="New category name" placeholder="e.g. National parks" value={newCategoryName} onChangeText={setNewCategoryName} maxLength={80} editable={!busy} /> : null}
-    <AcquiredDateField value={acquiredOn} onChange={setAcquiredOn} disabled={busy} />
-    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, ...(social.capabilities.friendsSharingEnabled || item?.visibility === 'friends' ? [{ id: 'friends', name: 'Friends only' }] : []), { id: 'public', name: 'Public' }]} value={visibility} onChange={value => { setVisibility(value as ItemVisibility); }} disabled={busy} />
+    </View>}
+    {!image ? <View style={ui.row}><Button title={item ? (photo ? 'Choose another' : 'Choose photo') : (jobs.length ? 'Add more photos' : 'Choose photos')} secondary icon={ImagePlus} onPress={() => { void choose(false); }} disabled={editingLocked || picking || (!item && jobs.length >= MAX_PHOTO_SELECTION)} style={{ flex: 1 }} /><Button title="Camera" secondary icon={Camera} onPress={() => { void choose(true); }} disabled={editingLocked || picking || (!item && jobs.length >= MAX_PHOTO_SELECTION)} /></View> : null}
+    <Field label="Item name" placeholder="Item name" value={title} onChangeText={setTitle} maxLength={120} editable={!editingLocked} />
+    <Choices label="Collection" options={collectionOptions} value={creatingCollection ? '__new_collection__' : collectionId} onChange={chooseCollection} disabled={editingLocked} />
+    {creatingCollection ? <Field label="New collection name" placeholder="e.g. Bottle caps" value={newCollectionName} onChangeText={setNewCollectionName} maxLength={80} editable={!editingLocked} /> : null}
+    <Choices label="Category" options={categoryOptions} value={creatingCategory ? '__new_category__' : categoryId} onChange={chooseCategory} disabled={editingLocked} />
+    {creatingCategory ? <Field label="New category name" placeholder="e.g. National parks" value={newCategoryName} onChangeText={setNewCategoryName} maxLength={80} editable={!editingLocked} /> : null}
+    <AcquiredDateField value={acquiredOn} onChange={setAcquiredOn} disabled={editingLocked} />
+    <Choices label="Visibility" options={[{ id: 'private', name: 'Private' }, ...(social.capabilities.friendsSharingEnabled || item?.visibility === 'friends' ? [{ id: 'friends', name: 'Friends only' }] : []), { id: 'public', name: 'Public' }]} value={visibility} onChange={value => { setVisibility(value as ItemVisibility); }} disabled={editingLocked} />
     <Text style={[ui.muted, { fontSize: 12, lineHeight: 18 }]}>{visibility === 'public' ? 'Anyone can see this item in Explore. Notes stay private.' : visibility === 'friends' ? 'Only people you follow who also follow you can see this item. Notes stay private.' : 'Only you can view this item.'}</Text>
-    <Field label="Notes (optional)" placeholder="Item notes" value={notes} onChangeText={setNotes} maxLength={2000} multiline editable={!busy} />
-    {policy.element}<ErrorMessage message={error} /><Button title={item || savedId ? 'Save item' : 'Add item'} icon={Check} onPress={() => { void save(); }} loading={busy} disabled={picking} />
+    <Field label="Notes (optional)" placeholder="Item notes" value={notes} onChangeText={setNotes} maxLength={2000} multiline editable={!editingLocked} />
+    {policy.element}<ErrorMessage message={error} />
+    {!item && jobs.some(job => job.status === 'failed' || job.status === 'paused') ? <Button title="Retry remaining photos" secondary onPress={() => { void save(); }} disabled={busy || picking} /> : null}
+    {busy && !item && jobs.length ? <Button title="Stop after current photo" secondary onPress={() => { stopRequested.current = true; }} /> : null}
+    <Button title={item || savedId ? 'Save item' : jobs.length ? `Add ${jobs.length} items` : 'Add item'} icon={Check} onPress={() => { void save(); }} loading={busy} disabled={picking || (!item && Boolean(frozenDraft))} />
   </Sheet>;
 }
 

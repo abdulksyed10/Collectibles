@@ -31,3 +31,15 @@ test('demo validates input and paginates collection-scoped results', async () =>
   assert.deepEqual(await repo.listCollections(), []);
   assert.equal((await repo.listItems({ search: '', page: 0 })).total, 0);
 });
+
+test('demo upload drafts replay privately without duplicating an item', async () => {
+  const repo = createDemoRepository();
+  const requestId = '00000000-0000-4000-8000-000000000871';
+  const draft = { title: 'Queued image', notes: '', visibility: 'public' as const };
+  const first = await repo.createUploadDraft(draft, requestId);
+  const replay = await repo.createUploadDraft(draft, requestId);
+  assert.equal(first.id, replay.id);
+  assert.equal(first.visibility, 'private');
+  assert.equal((await repo.readOwnedItem(first.id))?.id, first.id);
+  await assert.rejects(repo.createUploadDraft({ ...draft, title: 'Changed' }, requestId), /different data/i);
+});
