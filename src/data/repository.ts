@@ -210,6 +210,35 @@ export const repository: CollectionRepository = {
     if (error) throw error;
     return data as Item;
   },
+  async createUploadDraft(draft, requestId) {
+    if (!isCollectionId(requestId)) throw new Error('Invalid upload request.');
+    const value = { ...validateItem(draft), ...validateItemSettings(draft) };
+    const newCollectionName = draft.newCollectionName === undefined ? null : validateCollection({ name: draft.newCollectionName, description: '' }).name;
+    const newCategoryName = draft.newCategoryName === undefined ? null : validateCategory({ name: draft.newCategoryName }).name;
+    if (draft.collectionId && newCollectionName) throw new Error('Choose one collection option.');
+    if (draft.categoryId && newCategoryName) throw new Error('Choose one category option.');
+    const { data, error } = await requireClient().rpc('create_upload_draft', {
+      p_request_id: requestId,
+      p_draft: {
+        title: value.title,
+        notes: value.notes,
+        collectionId: draft.collectionId || null,
+        newCollectionName,
+        categoryId: value.category_id ?? null,
+        newCategoryName,
+        visibility: value.visibility ?? 'private',
+        acquiredOn: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on,
+      },
+    });
+    if (error) throw error;
+    return data as Item;
+  },
+  async readOwnedItem(itemId) {
+    if (!isCollectionId(itemId)) return null;
+    const { data, error } = await requireClient().from('items').select('*').eq('id', itemId).maybeSingle();
+    if (error) throw error;
+    return data as Item | null;
+  },
   async readImages(itemIds) {
     if (!itemIds.length) return [];
     const results: ItemImage[] = [];

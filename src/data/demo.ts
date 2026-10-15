@@ -50,6 +50,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
     updated_at: created_at,
   }));
   const images = new Map<string, ItemImage>(items.map((item, index) => [item.id, { itemId: item.id, url: samplePhoto(index), thumbnailUrl: samplePhoto(index), expiresAt: '2099-01-01T00:00:00Z' }]));
+  const uploadDrafts = new Map<string, { payload: string; itemId: string }>();
 
   function requireItem(id: string) {
     const item = items.find(value => value.id === id);
@@ -252,6 +253,33 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
       const item: Item = { id: `demo-${++sequence}`, owner_id, title: value.title, notes: value.notes, collection_id: collectionId, category_id: categoryId ?? null, visibility: value.visibility ?? 'private', acquired_on: value.acquired_on === undefined ? todayLocalDate() : value.acquired_on, created_at: value.updated_at, updated_at: value.updated_at };
       items = [item, ...items];
       return copyItem(item);
+    },
+    async createUploadDraft(draft, requestId) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) throw new Error('Invalid upload request.');
+      const payload = JSON.stringify({
+        title: validateItem(draft).title,
+        notes: validateItem(draft).notes,
+        collectionId: draft.collectionId || null,
+        newCollectionName: draft.newCollectionName ?? null,
+        categoryId: draft.categoryId ?? null,
+        newCategoryName: draft.newCategoryName ?? null,
+        visibility: draft.visibility ?? 'private',
+        acquiredOn: draft.acquiredOn === undefined ? todayLocalDate() : draft.acquiredOn,
+      });
+      const replay = uploadDrafts.get(requestId);
+      if (replay) {
+        if (replay.payload !== payload) throw new Error('This upload request was already used with different data.');
+        const existing = items.find(item => item.id === replay.itemId);
+        if (!existing) throw new Error('This upload draft was deleted and cannot be retried.');
+        return copyItem(existing);
+      }
+      const item = await this.saveItem({ ...draft, visibility: 'private' });
+      uploadDrafts.set(requestId, { payload, itemId: item.id });
+      return item;
+    },
+    async readOwnedItem(itemId) {
+      const item = items.find(value => value.id === itemId);
+      return item ? copyItem(item) : null;
     },
     async readImages(ids) { return ids.flatMap(id => { const image = images.get(id); return image ? [{ ...image }] : []; }); },
     async uploadPhoto(itemId, photo) {

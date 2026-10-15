@@ -134,6 +134,10 @@ export interface CollectionRepository extends SocialRepository {
   listBlockedPublishers(): Promise<BlockedPublisher[]>;
   unblockPublicPublisher(publisherId: string): Promise<boolean>;
   saveItem(draft: ItemDraft, id?: string): Promise<Item>;
+  /** Creates a private, replay-safe item for one selected photo. */
+  createUploadDraft(draft: ItemDraft, requestId: string): Promise<Item>;
+  /** Returns an owned item after an ambiguous final write, or null if unavailable. */
+  readOwnedItem(itemId: string): Promise<Item | null>;
   readImages(itemIds: string[]): Promise<ItemImage[]>;
   uploadPhoto(itemId: string, photo: PreparedPhoto): Promise<void>;
   deleteItem(itemId: string): Promise<void>;
