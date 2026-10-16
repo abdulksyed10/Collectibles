@@ -44,7 +44,6 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
   const [error, setError] = useState('');
   const [failedPhotos, setFailedPhotos] = useState<Set<string>>(new Set());
   const [selectedEntry, setSelectedEntry] = useState<PublicEntryCard | null>(null);
-  const selectedNavigation = useEntryNavigation(cards.filter(isEntry), selectedEntry?.id, setSelectedEntry);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const pageRef = useRef(0);
@@ -85,7 +84,7 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
   useEffect(() => {
     const request = ++requestRef.current;
     pageRef.current = 0; loadingMoreRef.current = false;
-    setLoading(true); setMoreLoading(false); setError(''); setCards([]); setPhotos({}); setFailedPhotos(new Set());
+    setLoading(true); setMoreLoading(false); setError(''); setCards([]); setPhotos({}); setSelectedEntry(null); setFailedPhotos(new Set());
     void (async () => {
       try {
         const page = await getPage(0);
@@ -133,6 +132,7 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
   }
 
   const viewTitle = view === 'entries' ? 'Entries' : 'Collections';
+  const selectedNavigation = useEntryNavigation(cards.filter(isEntry), selectedEntry?.id, setSelectedEntry, { hasMore: hasMore && pageRef.current < 20, loadMore, busy: loading || moreLoading });
   return <View style={{ flex: 1, width: '100%', minWidth: 0 }} onLayout={onLayout}>
     <FlatList {...scrollbar} key={`${view}-${layout.columns}`} data={cards} keyExtractor={cardKey} numColumns={layout.columns} style={[{ flex: 1 }, scrollbar.style]} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 48, flexGrow: 1 }} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 14, paddingBottom: 16 }}>
@@ -165,12 +165,12 @@ export function PublicCatalog({ onLibrary, onFollowing, onOpenCollection, onOpen
       ListEmptyComponent={loading ? <View style={{ alignItems: 'center', padding: 36 }}><ActivityIndicator color={colors.green} /></View> : !error ? <View style={{ alignItems: 'center', padding: 36, gap: 9 }}><Package size={36} color={colors.muted} strokeWidth={1.2} /><Text style={{ color: colors.ink, fontFamily: fonts.bold }}>Nothing shared yet</Text><Text style={ui.muted}>Check back after collectors share entries.</Text></View> : null}
       ListFooterComponent={hasMore ? <Button title={`Load more ${viewTitle.toLowerCase()}`} secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selectedEntry ? <EntryViewer title={selectedEntry.title} onClose={() => setSelectedEntry(null)} navigation={selectedNavigation} media={style => selectedEntry.hasPhoto ? <Image source={{ uri: demo ? photos[selectedEntry.id]?.url : publicPhotoUrl(selectedEntry.collectionId, selectedEntry.id, 'full') }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selectedEntry.title} onError={() => setFailedPhotos(current => new Set(current).add(selectedEntry.id))} /> : <View style={{ alignItems: 'center', justifyContent: 'center', gap: 10 }}><Package size={44} color={colors.muted} /><Text style={ui.muted}>No photo</Text></View>}>
+    {selectedEntry ? <EntryViewer entryId={selectedEntry.id} title={selectedEntry.title} onClose={() => setSelectedEntry(null)} navigation={selectedNavigation} media={style => selectedEntry.hasPhoto ? <Image source={{ uri: demo ? photos[selectedEntry.id]?.url : publicPhotoUrl(selectedEntry.collectionId, selectedEntry.id, 'full') }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selectedEntry.title} onError={() => setFailedPhotos(current => new Set(current).add(selectedEntry.id))} /> : <View style={{ alignItems: 'center', justifyContent: 'center', gap: 10 }}><Package size={44} color={colors.muted} /><Text style={ui.muted}>No photo</Text></View>}>
       <Text style={ui.muted}>{selectedEntry.collectionName}</Text>
-      {socialActions && selectedEntry.creator ? <EntryMetaRow username={selectedEntry.creator.username} onOpenProfile={() => { setSelectedEntry(null); setProfileId(selectedEntry.creator!.publisherId); }} dateText={selectedEntry.postDate ? formatEntryPostDate(selectedEntry.postDate) : undefined}>
-        {selectedEntry.likes ? selectedEntry.publisherId === ownPublisherId ? <IconActionButton label={`${selectedEntry.likes.count} ${selectedEntry.likes.count === 1 ? 'like' : 'likes'}`} icon={Heart} count={selectedEntry.likes.count} onPress={() => undefined} disabled /> : <LikeButton variant="compact" itemId={selectedEntry.id} value={selectedEntry.likes} onChanged={likes => updateEntryLikes(selectedEntry.id, likes)} /> : null}
-        {selectedEntry.relationship && selectedEntry.creator.publisherId !== ownPublisherId ? <FollowButton variant="compact" collector={{ publisherId: selectedEntry.creator.publisherId, username: selectedEntry.creator.username, relationship: selectedEntry.relationship }} onChanged={relationship => updatePublisherRelationship(selectedEntry.creator!.publisherId, relationship)} /> : null}
-      </EntryMetaRow> : null}
+      {selectedEntry.creator ? <EntryMetaRow username={selectedEntry.creator.username} onOpenProfile={() => { setSelectedEntry(null); setProfileId(selectedEntry.creator!.publisherId); }} dateText={selectedEntry.postDate ? formatEntryPostDate(selectedEntry.postDate) : undefined}>
+        {socialActions && selectedEntry.likes ? selectedEntry.publisherId === ownPublisherId ? <IconActionButton label={`${selectedEntry.likes.count} ${selectedEntry.likes.count === 1 ? 'like' : 'likes'}`} icon={Heart} count={selectedEntry.likes.count} onPress={() => undefined} disabled /> : <LikeButton variant="compact" itemId={selectedEntry.id} value={selectedEntry.likes} onChanged={likes => updateEntryLikes(selectedEntry.id, likes)} /> : null}
+        {socialActions && selectedEntry.relationship && selectedEntry.creator.publisherId !== ownPublisherId ? <FollowButton variant="compact" collector={{ publisherId: selectedEntry.creator.publisherId, username: selectedEntry.creator.username, relationship: selectedEntry.relationship }} onChanged={relationship => updatePublisherRelationship(selectedEntry.creator!.publisherId, relationship)} /> : null}
+      </EntryMetaRow> : selectedEntry.postDate ? <Text style={[ui.muted, { fontSize: 12 }]}>{formatEntryPostDate(selectedEntry.postDate)}</Text> : null}
       <Button title="View full collection" secondary onPress={() => { const collectionId = selectedEntry.collectionId; setSelectedEntry(null); onOpenCollection(collectionId); }} />
       <PublicSafetyControls repository={repository} collectionId={selectedEntry.collectionId} itemId={selectedEntry.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelectedEntry(null); refresh(); }} />
     </EntryViewer> : null}

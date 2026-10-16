@@ -6,9 +6,13 @@ alter table public.items add column if not exists posted_at timestamptz;
 
 -- Preserve the historical acquisition date for entries that existed before
 -- posting dates were introduced. The old guard changes updated_at, so disable
--- only that trigger for this server-owned backfill within this transaction.
+-- the metadata and contribution guards for this server-owned backfill within
+-- the transaction. Old accounts may not yet have accepted the current policy.
+-- The table lock prevents concurrent app writes while these guards are off.
 alter table public.items disable trigger guard_pins;
+alter table public.items disable trigger contribution_policy;
 update public.items set legacy_post_date = acquired_on where acquired_on is not null and legacy_post_date is null;
+alter table public.items enable trigger contribution_policy;
 alter table public.items enable trigger guard_pins;
 
 create or replace function private.entry_post_date_json(p_legacy date, p_posted timestamptz, p_created timestamptz)
@@ -28,7 +32,7 @@ language plpgsql security definer set search_path = '' as $$
 begin
   update public.items
     set posted_at = coalesce(posted_at, new.created_at)
-    where id = new.item_id and owner_id = new.owner_id;
+    where id = new.item_id and owner_id = new.owner_id and posted_at is null;
   return new;
 end;
 $$;

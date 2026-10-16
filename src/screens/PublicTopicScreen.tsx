@@ -11,7 +11,7 @@ import { useGalleryLayout } from '../components/useGalleryLayout';
 import { EntryViewer } from '../components/EntryViewer';
 import { useEntryNavigation } from '../components/useEntryNavigation';
 import { useSubtleScrollbar } from '../components/scrollbars';
-import { formatEntryPostDate } from '../domain/postDates';
+import { PublicEntryMeta } from '../social/PublicEntryMeta';
 
 import { PublicSafetyControls } from '../components/PublicSafetyControls';
 type Photo = { full: string; thumb: string };
@@ -23,7 +23,6 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
   const [entries, setEntries] = useState<PublicEntryCard[]>([]);
   const [photos, setPhotos] = useState<Record<string, Photo>>({});
   const [selected, setSelected] = useState<PublicEntryCard | null>(null);
-  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected);
   const [loading, setLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -33,6 +32,7 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
   const [failedPhotos, setFailedPhotos] = useState<Set<string>>(new Set());
   const pageRef = useRef(0);
   const requestRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   const load = useCallback(async (page: number) => {
     const result = await repository.readPublicTopic(topicKey, page);
@@ -50,7 +50,7 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
   useEffect(() => onPublicPreferencesChange(refresh), [refresh]);
   useEffect(() => {
     const request = ++requestRef.current;
-    pageRef.current = 0; setLoading(true); setError(''); setEntries([]); setPhotos({}); setSelected(null); setFailedPhotos(new Set());
+    pageRef.current = 0; loadingMoreRef.current = false; setMoreLoading(false); setLoading(true); setError(''); setEntries([]); setPhotos({}); setSelected(null); setFailedPhotos(new Set());
     void load(0).then(({ result, nextPhotos }) => {
       if (request !== requestRef.current) return;
       setName(result.topic.name); setEntries(result.entries); setPhotos(nextPhotos); setTotal(result.total); setHasMore(result.hasMore);
@@ -58,17 +58,21 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
     return () => { requestRef.current++; };
   }, [load, revision]);
   async function loadMore() {
-    if (moreLoading || !hasMore || pageRef.current >= 20) return;
+    if (loading || loadingMoreRef.current || !hasMore || pageRef.current >= 20) return;
+    const request = requestRef.current;
+    loadingMoreRef.current = true;
     setMoreLoading(true);
     try {
       const { result, nextPhotos } = await load(pageRef.current + 1);
+      if (request !== requestRef.current) return;
       pageRef.current++;
       setEntries(current => [...current, ...result.entries.filter(entry => !current.some(old => old.id === entry.id))]);
       setPhotos(current => ({ ...current, ...nextPhotos })); setTotal(result.total); setHasMore(result.hasMore);
-    } catch (reason) { setError(messageOf(reason)); }
-    finally { setMoreLoading(false); }
+    } catch (reason) { if (request === requestRef.current) setError(messageOf(reason)); }
+    finally { if (request === requestRef.current) { loadingMoreRef.current = false; setMoreLoading(false); } }
   }
   function photoFailed(id: string) { setFailedPhotos(current => new Set(current).add(id)); }
+  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected, { hasMore: hasMore && pageRef.current < 20, loadMore, busy: loading || moreLoading });
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onBack} /><Brand small /></View>
     <FlatList {...scrollbar} key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} style={scrollbar.style} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 32, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
@@ -77,6 +81,6 @@ export function PublicTopicScreen({ topicKey, repository, onBack, onOpenCollecti
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : null}
       ListFooterComponent={hasMore ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} navigation={selectedNavigation} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}><Text style={ui.muted}>{selected.collectionName}</Text>{selected.postDate ? <Text style={[ui.muted, { fontSize: 12 }]}>{formatEntryPostDate(selected.postDate)}</Text> : null}<Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /><PublicSafetyControls repository={repository} collectionId={selected.collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); refresh(); }} /></EntryViewer> : null}
+    {selected ? <EntryViewer entryId={selected.id} title={selected.title} onClose={() => setSelected(null)} navigation={selectedNavigation} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}><Text style={ui.muted}>{selected.collectionName}</Text><PublicEntryMeta key={selected.id} entry={selected} onChange={patch => { setSelected(current => current?.id === selected.id ? { ...current, ...patch } : current); setEntries(current => current.map(entry => entry.id === selected.id ? { ...entry, ...patch } : entry)); }} /><Button title="View full collection" secondary onPress={() => { const collectionId = selected.collectionId; setSelected(null); onOpenCollection(collectionId); }} /><PublicSafetyControls repository={repository} collectionId={selected.collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); refresh(); }} /></EntryViewer> : null}
   </SafeAreaView>;
 }

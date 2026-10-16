@@ -31,7 +31,6 @@ export function CollectorProfileScreen({ publisherId, onClose, onSignIn }: { pub
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<SharedEntry | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
-  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected);
   const requests = useRef(createSharedRequestGate());
   const refresh = useCallback(() => setRevision(value => value + 1), []);
 
@@ -72,6 +71,7 @@ export function CollectorProfileScreen({ publisherId, onClose, onSignIn }: { pub
     setSelected(current => current?.id === next.id ? next : current);
   }
   const handle = profile?.username ?? 'collector';
+  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected, { hasMore: Boolean(cursor), loadMore, busy: loading || moreLoading });
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onClose} />{onSignIn ? <Button title="Sign in" secondary onPress={onSignIn} /> : null}</View>
     <FlatList {...scrollbar} key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} style={scrollbar.style} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 40, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}

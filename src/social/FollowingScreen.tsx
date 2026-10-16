@@ -33,7 +33,6 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
   const [collector, setCollector] = useState<CollectorProfile | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [collectionId, setCollectionId] = useState<string | null>(null);
-  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected);
   const requests = useRef(createSharedRequestGate());
   const refresh = useCallback(() => setRevision(value => value + 1), []);
   useEffect(() => subscribeSocialInvalidation(reason => { if (reason !== 'like') refresh(); }), [refresh]);
@@ -50,6 +49,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
   }, [friendsOnly, repository, revision]);
   useEffect(() => {
     let active = true;
+    setCollector(null);
     if (!selected) { setCollector(null); return () => { active = false; }; }
     void repository.getCollector(selected.publisherId).then(value => { if (active) setCollector(value); }).catch(() => { if (active) setCollector(null); });
     return () => { active = false; };
@@ -72,6 +72,7 @@ export function FollowingScreen({ onLibrary, onExplore, onManagePeople }: Props)
     setSelected(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
     setCollector(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
   }
+  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected, { hasMore: Boolean(cursor), loadMore, busy: loading || moreLoading });
   return <View style={{ flex: 1, width: '100%', minWidth: 0 }} onLayout={onLayout}>
     <FlatList {...scrollbar} key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} style={scrollbar.style} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 44, flexGrow: 1 }} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => setRevision(value => value + 1)} tintColor={colors.green} />}
       ListHeaderComponent={<View style={{ gap: 14, paddingBottom: 16 }}>

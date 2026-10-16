@@ -1,6 +1,19 @@
-# Deployment checkpoint — updated October 10, 2026
+# Deployment checkpoint — updated October 15, 2026
 
-## Current social release: database deployed, feature activation pending
+## Gallery, viewer, and batch upload release — October 15
+
+The owner authorized the final review, Supabase deployment, integration into `main`, and website deployment. Vercel project `collectibles` now tracks **main**; the older branch/authentication notes below describe the October 10 state only. The site is `https://www.sharecollectibles.com`.
+
+- Applied `202610140001_entry_post_dates` and `202610140002_upload_draft_requests` to the existing linked Supabase project. Verified that all 16 items, 16 images, and 18 collections present before deployment remain. Ten existing entries received acquired-date snapshots. These are deployment-time counts, not fixed inventory limits.
+- Verified both item guards remain enabled; post dates are server-controlled; upload-draft creation is authenticated-only; its request ledger is inaccessible to application roles. Public projections expose the safe display date. No Edge Function changes were required for this release.
+- Saved a schema-only backup of `public` and `private` to ignored `.tmp/pre-gallery-release-20261015-schema.sql`. It contains no exported account or item records and has not been restore-tested. Full account/data export was not performed for this release.
+- The frontend includes responsive galleries, a persistent 260px desktop sidebar, thin themed scrollbars, a shared entry viewer with keyboard/swipe/page navigation, compact metadata, display dates, and batches of up to ten independent photo entries.
+- Batch entries start private and receive the selected audience only after a confirmed photo attachment. Retries replay the original request and reuse saved entries/photos. Local unreadable files can be skipped; service/permission/quota failures pause the remaining queue. Existing storage quotas and visibility/moderation rules remain in force.
+- Review corrected a shared-viewer provider crash, expanding sidebar, stale navigation metadata, lost-response retry cases, and historical-date migration guards. Verification is recorded in `VERIFICATION.md`.
+
+The frontend source is prepared for the authorized merge and production build. Confirm the resulting Vercel deployment is READY for the merged commit before reporting the website deployment complete. Signed Android/iOS device acceptance and store uploads remain separate work.
+
+## Social release checkpoint — October 10 (historical)
 
 On October 10, the owner authorized database deployment and branch integration. All seven social migrations (`202610090001` through `202610090007`) are now applied; the linked remote migration history matches the local history. Existing metadata counts remained unchanged after deployment. Fresh schema/data backups for `public`, `private`, and `auth` were saved to ignored `.tmp/pre-social-release-20261010-v2-{schema,data}.sql`; they must stay local and have not been restore-tested.
 

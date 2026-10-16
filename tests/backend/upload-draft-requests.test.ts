@@ -80,7 +80,35 @@ test('the RPC and its private request ledger are unavailable to anonymous caller
       db.query('SELECT public.create_upload_draft($1,$2::jsonb)', ['00000000-0000-4000-8000-000000000864', draft('No access')]),
       /permission denied/i,
     );
+    await assert.rejects(db.query('SELECT * FROM private.upload_draft_requests'), /permission denied/i);
   } finally {
     await db.exec('RESET ROLE;');
   }
+});
+
+test('malformed drafts cannot create records or expose the private ledger', async () => {
+  const id = '00000000-0000-4000-8000-000000000865';
+  await asOwner(db, ownerA, async () => {
+    await assert.rejects(db.query('SELECT * FROM private.upload_draft_requests'), /permission denied/i);
+    for (const value of [null, [], {}, { title: 'Missing notes' }, { title: 123, notes: '' }, { title: 'Extra', notes: '', owner_id: ownerB }, { title: 'Date', notes: '', acquiredOn: 'tomorrow' }, { title: 'Date', notes: '', acquiredOn: '2026-02-30' }]) {
+      await assert.rejects(db.query('SELECT public.create_upload_draft($1,$2::jsonb)', [id, JSON.stringify(value)]), /invalid/i);
+    }
+  });
+  assert.equal((await db.query<{ count: number }>('select count(*) from private.upload_draft_requests where request_id=$1', [id])).rows[0]!.count, 0);
+});
+
+test('draft creation preserves policy acceptance and account deletion boundaries', async () => {
+  const id = '00000000-0000-4000-8000-000000000866';
+  await db.query('delete from private.owner_public_rules where owner_id=$1', [ownerB]);
+  await asOwner(db, ownerB, async () => {
+    await assert.rejects(db.query('SELECT public.create_upload_draft($1,$2::jsonb)', [id, draft('Policy')]), /accept.*Terms/i);
+    await db.exec("select public.accept_public_rules('2026-10-04')");
+  });
+  await db.query('update private.owner_state set deleting=true where owner_id=$1', [ownerB]);
+  try {
+    await asOwner(db, ownerB, async () => {
+      await assert.rejects(db.query('SELECT public.create_upload_draft($1,$2::jsonb)', [id, draft('Deleting')]), /deletion.*progress/i);
+    });
+  } finally { await db.query('update private.owner_state set deleting=false where owner_id=$1', [ownerB]); }
+  assert.equal((await db.query<{ count: number }>('select count(*) from private.upload_draft_requests where request_id=$1', [id])).rows[0]!.count, 0);
 });

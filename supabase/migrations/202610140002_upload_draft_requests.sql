@@ -54,7 +54,7 @@ begin
   ) then
     raise exception 'Invalid upload draft fields.' using errcode = '22023';
   end if;
-  if jsonb_typeof(p_draft->'title') <> 'string' or jsonb_typeof(p_draft->'notes') <> 'string' then
+  if jsonb_typeof(p_draft->'title') is distinct from 'string' or jsonb_typeof(p_draft->'notes') is distinct from 'string' then
     raise exception 'Invalid upload draft.' using errcode = '22023';
   end if;
   if (p_draft ? 'collectionId') and jsonb_typeof(p_draft->'collectionId') not in ('string', 'null')
@@ -74,6 +74,10 @@ begin
   category_name := nullif(btrim(p_draft->>'newCategoryName'), '');
   visibility_value := coalesce(p_draft->>'visibility', 'private');
   acquired_on := p_draft->>'acquiredOn';
+
+  if acquired_on is not null and acquired_on !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+    raise exception 'Invalid acquired date.' using errcode = '22023';
+  end if;
 
   if char_length(title_value) not between 1 and 120 or char_length(notes_value) > 2000 then
     raise exception 'Invalid upload draft.' using errcode = '22023';
@@ -95,7 +99,7 @@ begin
     if collection_id is not null then perform collection_id::uuid; end if;
     if category_id is not null then perform category_id::uuid; end if;
     if acquired_on is not null then perform acquired_on::date; end if;
-  exception when invalid_text_representation or datetime_field_overflow then
+  exception when invalid_text_representation or datetime_field_overflow or invalid_datetime_format then
     raise exception 'Invalid upload draft.' using errcode = '22023';
   end;
 
@@ -161,6 +165,9 @@ begin
   -- Drafts must stay private until their photo is confirmed. The normalized
   -- intended audience remains in the private ledger and the client applies it
   -- through the existing guarded save flow after media success.
+  if (select count(*) from private.upload_draft_requests where owner_id=actor and created_at > clock_timestamp() - interval '1 day') >= 500 then
+    raise exception 'Daily item creation limit reached. Try again tomorrow.' using errcode = '23514';
+  end if;
   select * into saved_item from public.save_item_draft(
     normalized->>'title',
     normalized->>'notes',

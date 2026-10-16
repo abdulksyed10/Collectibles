@@ -19,7 +19,7 @@ test('public collection views contain only public items and public catalog count
   const catalog = await repo.listPublicCollections(0);
   assert.deepEqual(catalog.collections, [{ id: pins.id, name: 'Pins', itemCount: 1, coverItemId: null, isOwner: true }]);
   const shared = await repo.readSharedCollection(pins.id, 0);
-  assert.deepEqual(shared.items, [{ id: publicItem.id, title: 'Park pin', hasPhoto: false, categoryId: parks.id, categoryName: 'Parks' }]);
+  assert.deepEqual(shared.items, [{ id: publicItem.id, title: 'Park pin', hasPhoto: false, categoryId: parks.id, categoryName: 'Parks', postDate: { kind: 'added', value: publicItem.created_at } }]);
   await repo.saveItem({ title: 'Park pin', notes: '', collectionId: pins.id, visibility: 'private' }, publicItem.id);
   await assert.rejects(repo.readSharedCollection(pins.id, 0), /unavailable/i);
 });
@@ -36,5 +36,6 @@ test('explore entries expose public entry cards without notes or categories', as
     hasPhoto: false,
     collectionId: pins.id,
     collectionName: 'Pins',
+    postDate: { kind: 'added', value: publicItem.created_at },
   }]);
 });

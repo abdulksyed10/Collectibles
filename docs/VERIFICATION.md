@@ -1,6 +1,16 @@
-# Frontend verification — updated September 24, 2026
+# Frontend verification — updated October 15, 2026
 
 This file is chronological. The latest completed stage and remaining live work are in [the deployment checkpoint](DEPLOYMENT-CHECKPOINT.md) and [beta launch checklist](BETA-LAUNCH.md).
+
+## Gallery/viewer/batch release review — October 15, 2026
+
+- `npm test`: **215 passed, zero failed or skipped**. Includes actual migration execution in PGlite, historical date upgrades with existing guards, authenticated retry-safe draft RPCs, ownership/privacy checks, and batch recovery after lost create/upload/publish responses.
+- Final fixture browser run: **21 passed, zero failed or skipped**. Coverage includes ten image selections creating ten separate entries, oversize selection preservation, correcting an empty title, desktop/sidebar layout, more than four columns, pagination inside the viewer, keyboard navigation, narrow-screen close controls, and collection/image revocation while a viewer is open. Authentication, CAPTCHA, public policy routes, and demo isolation are also covered.
+- Fixture web, Android, and iOS exports compile with native Hermes output. TypeScript checks pass. Fixture exports use synthetic service settings and are not production deployment artifacts; Vercel rebuilds the source with production configuration.
+- Manual local screenshot inspection covers desktop dark mode and the narrow light-mode viewer. It identified a sidebar stretching issue missed by the original browser assertions; the corrected test checks both sidebar width and five entries sharing a row at 1600px.
+- Production metadata checks after migration confirm unchanged item/image/collection counts, enabled guards, authenticated-only draft creation, private ledger access, server-owned dates, and the date projection. No production uploads, deletions, or user account changes were used for these checks.
+
+These checks do not replace signed-device testing of camera/photo permissions, native swipe behavior, app switching, and real device networking. Full tests use local service fixtures/PGlite; successful bundle compilation is not a store build or installed-device test.
 
 ## Collection-first redesign — September 24, 2026
 

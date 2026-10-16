@@ -190,8 +190,8 @@ test('categories are nested below their collection and sibling entries can have 
   await expect(page.getByRole('button', { name: 'View Public pin', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'View Private pin', exact: true })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Explore collections', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'View Pins collection', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'View Pins collection', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'View Pins', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'View Pins', exact: true }).click();
   await expect(page.getByRole('button', { name: 'View Public pin', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'View Private pin', exact: true })).toHaveCount(0);
 });
@@ -219,8 +219,15 @@ test('desktop galleries fill their measured pane and keep collections available 
   }
   await expect(page.getByRole('button', { name: 'Open Desktop entry 5', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'All collections', exact: true })).toBeVisible();
+  const sidebarButton = await page.getByRole('button', { name: 'All collections', exact: true }).boundingBox();
+  expect(sidebarButton?.width).toBeLessThan(260);
+  const firstCard = await page.getByRole('button', { name: 'Open Desktop entry 5', exact: true }).boundingBox();
+  const fifthCard = await page.getByRole('button', { name: 'Open Desktop entry 1', exact: true }).boundingBox();
+  expect(firstCard && fifthCard && Math.abs(firstCard.y - fifthCard.y) < 2).toBeTruthy();
   await page.getByRole('button', { name: 'Explore', exact: true }).click();
   await expect(page.getByRole('button', { name: 'All collections', exact: true })).toBeVisible();
+  const exploreSidebar = await page.getByRole('button', { name: 'All collections', exact: true }).boundingBox();
+  expect(exploreSidebar?.width).toBeLessThan(260);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
 

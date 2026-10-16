@@ -6,11 +6,12 @@ import type { Category, Collection, Item, ItemDraft, ItemImage, ItemVisibility, 
 import { useRepository } from '../data/RepositoryProvider';
 import { pickPhoto, preparePhoto, selectPhotoAssets } from '../lib/photos';
 import { validateAcquiredDate } from '../domain/dates';
+import { validateItem } from '../domain/validation';
 import { confirmPhotoUpload, initialItemAcquiredOn, savedItemPlacement } from '../domain/itemPhoto';
 import { AcquiredDateField } from '../components/AcquiredDateField';
 import { Button, colors, ErrorMessage, Field, fonts, messageOf, Sheet, ui } from '../components/ui';
 import { PhotoSelectionQueue } from '../components/PhotoSelectionQueue';
-import { appendUploadJobs, draftForSavedPlacement, type BatchUploadJob } from '../domain/batchUpload';
+import { appendUploadJobs, runUploadBatch, type BatchUploadJob } from '../domain/batchUpload';
 import { MAX_PHOTO_SELECTION } from '../domain/photoSelection';
 import * as Crypto from 'expo-crypto';
 
@@ -91,6 +92,10 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
   const [jobs, setJobs] = useState<BatchUploadJob[]>([]);
   const [frozenDraft, setFrozenDraft] = useState<ItemDraft | null>(null);
   const stopRequested = useRef(false);
+  const running = useRef(false);
+  const pickerOpen = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [busy, setBusy] = useState(false); const [picking, setPicking] = useState(false); const [error, setError] = useState('');
   const [collectionChoices, setCollectionChoices] = useState<CollectionChoice[]>(() => collections.map(collection => ({ id: collection.id, name: collection.name })));
   const [categoryChoices, setCategoryChoices] = useState<CategoryChoice[]>(() => categories.map(category => ({ id: category.id, name: category.name, collection_id: category.collection_id })));
@@ -98,6 +103,8 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
   useEffect(() => { setCategoryChoices(current => mergeChoices(current, categories.map(category => ({ id: category.id, name: category.name, collection_id: category.collection_id })))); }, [categories]);
   const selectedCategories = useMemo(() => categoryChoices.filter(category => category.collection_id === collectionId), [categoryChoices, collectionId]);
   async function choose(camera: boolean) {
+    if (pickerOpen.current || running.current) return;
+    pickerOpen.current = true;
     setError(''); setPicking(true);
     try {
       if (item) {
@@ -108,7 +115,7 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
         if (assets.length) setJobs(current => appendUploadJobs(current, assets, Crypto.randomUUID));
       }
     } catch (reason) { setError(messageOf(reason)); }
-    finally { setPicking(false); }
+    finally { pickerOpen.current = false; if (mounted.current) setPicking(false); }
   }
   function chooseCollection(id: string) {
     if (id === '__new_collection__') { setCollectionId(''); setCreatingCollection(true); setCategoryId(''); return; }
@@ -130,12 +137,10 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     };
   }
   function validateDraft() {
+    validateItem({ title, notes });
     if (creatingCollection && !newCollectionName.trim()) throw new Error('Enter a collection name.');
     if (creatingCategory && !newCategoryName.trim()) throw new Error('Enter a category name.');
     validateAcquiredDate(acquiredOn);
-  }
-  function updateJob(jobId: string, change: Partial<BatchUploadJob>) {
-    setJobs(current => current.map(job => job.id === jobId ? { ...job, ...change } : job));
   }
   async function saveSingle(draft: ItemDraft) {
     let metadataSaved = false;
@@ -160,75 +165,40 @@ export function ItemEditor({ item, image, collections, categories, initialCollec
     }
   }
   async function saveBatch(draft: ItemDraft) {
+    // Do not freeze the form until the user has accepted the required rules.
     await policy.ensure();
+    if (!mounted.current) return;
+    setFrozenDraft(draft);
     stopRequested.current = false;
-    let placement: Item | null = null;
-    let failed = 0;
-    // A retry can start after another job already created the shared inline
-    // collection/category. Resolve that placement first so it is never made a
-    // second time just because the first queued file failed locally.
-    for (const existingJob of jobs) {
-      if (!existingJob.itemId) continue;
-      const existing = await repository.readOwnedItem(existingJob.itemId);
-      if (existing) { placement = existing; break; }
-    }
-    for (const startingJob of jobs) {
-      if (startingJob.status === 'saved') continue;
-      if (stopRequested.current) {
-        updateJob(startingJob.id, { status: 'paused' });
-        continue;
-      }
-      let job = startingJob;
-      try {
-        const effectiveDraft = placement ? draftForSavedPlacement(draft, placement) : draft;
-        updateJob(job.id, { status: 'preparing', error: undefined });
-        const prepared = await preparePhoto(job.asset as Parameters<typeof preparePhoto>[0]);
-        let saved: Item;
-        if (job.itemId) {
-          updateJob(job.id, { status: 'creating' });
-          const existing = await repository.readOwnedItem(job.itemId);
-          if (!existing) throw new Error('This upload draft is no longer available. It cannot be recreated automatically.');
-          saved = existing;
-        } else {
-          updateJob(job.id, { status: 'creating' });
-          saved = await repository.createUploadDraft(effectiveDraft, job.requestId);
-          job = { ...job, itemId: saved.id };
-          updateJob(job.id, { itemId: saved.id });
-        }
-        placement ??= saved;
-        updateJob(job.id, { status: 'uploading' });
-        await confirmPhotoUpload(repository, saved.id, prepared);
-        if (draft.visibility !== 'private') {
-          updateJob(job.id, { status: 'publishing' });
-          await repository.saveItem(draftForSavedPlacement(draft, saved), saved.id);
-        }
-        updateJob(job.id, { status: 'saved', error: undefined });
-      } catch (reason) {
-        failed += 1;
-        updateJob(job.id, { status: 'failed', error: messageOf(reason) });
-      }
-    }
-    if (failed) {
-      setError(`${jobs.length - failed} saved, ${failed} need attention. Retry failed photos to reuse their saved drafts.`);
-      return;
-    }
-    if (stopRequested.current) { setError('Upload paused. Your completed items are saved.'); return; }
-    onSaved();
+    const result = await runUploadBatch(jobs, draft, {
+      repository,
+      prepare: asset => preparePhoto(asset as Parameters<typeof preparePhoto>[0]),
+      shouldStop: () => stopRequested.current,
+      isActive: () => mounted.current,
+      onChange: setJobs,
+    });
+    if (!mounted.current) return;
+    const saved = result.filter(job => job.status === 'saved').length;
+    if (saved === result.length) { onSaved(); return; }
+    const failed = result.filter(job => job.status === 'failed').length;
+    const paused = result.filter(job => job.status === 'paused').length;
+    setError(`${saved} saved, ${failed} need attention, ${paused} paused. Retry remaining photos to continue with the same entries.`);
   }
   async function save() {
+    if (running.current || pickerOpen.current) return;
     let draft: ItemDraft;
     try { validateDraft(); draft = frozenDraft ?? itemDraft(); }
     catch (reason) { setError(messageOf(reason)); return; }
+    running.current = true;
     setBusy(true); setError('');
     try {
       if (!item && jobs.length) {
-        if (!frozenDraft) setFrozenDraft(draft);
         await saveBatch(draft);
       } else await saveSingle(draft);
     } catch (reason) { setError(messageOf(reason)); }
-    finally { setBusy(false); }
+    finally { running.current = false; if (mounted.current) setBusy(false); }
   }
-  function close() { if (savedId || jobs.some(job => job.itemId)) onSaved(); else onClose(); }
+  function close() { if (savedId || frozenDraft) onSaved(); else onClose(); }
   const collectionOptions = item
     ? collectionChoices
     : [{ id: '', name: 'General', subtitle: 'Created if needed' }, ...collectionChoices, { id: '__new_collection__', name: 'New collection' }];

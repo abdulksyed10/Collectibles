@@ -1,3 +1,4 @@
+import { getOwnedEntryPostDate } from '../domain/postDates';
 import type { Category, Collection, CollectionRepository, CollectionSummary, Item, ItemImage, ItemVisibility } from '../domain/models';
 import { validateCategory, validateCategorySettings, validateCollection, validateItem, validateItemSettings } from '../domain/validation';
 import { todayLocalDate } from '../domain/dates';
@@ -46,6 +47,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
     visibility: index === 0 || index === 3 ? 'public' : 'private',
     publication: { status: index === 0 || index === 3 ? 'published' : 'private', message: '' },
     acquired_on: index === 0 ? '2025-08-14' : null,
+    legacy_post_date: index === 0 ? '2025-08-14' : null,
     created_at,
     updated_at: created_at,
   }));
@@ -165,6 +167,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
           id: item.id,
           title: item.title,
           hasPhoto: images.has(item.id),
+          postDate: getOwnedEntryPostDate(item),
           categoryId: item.category_id,
           categoryName: categories.find(category => category.id === item.category_id)?.name ?? null,
         })),
@@ -180,6 +183,7 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
           id: item.id,
           title: item.title,
           hasPhoto: images.has(item.id),
+          postDate: getOwnedEntryPostDate(item),
           collectionId: item.collection_id,
           collectionName: requireCollection(item.collection_id).name,
         })),
@@ -216,7 +220,8 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
       validateSharedPage(page);
       const matches = collectionSummaries({ visibility: 'public' }).filter(collection => topicKey(collection.name) === key);
       if (!matches.length) throw new Error('Collection unavailable.');
-      const entries = itemsFor({ visibility: 'public' }).filter(item => topicKey(requireCollection(item.collection_id).name) === key).map(item => ({ id: item.id, title: item.title, hasPhoto: images.has(item.id), collectionId: item.collection_id, collectionName: requireCollection(item.collection_id).name }));
+      const entries = itemsFor({ visibility: 'public' }).filter(item => topicKey(requireCollection(item.collection_id).name) === key).map(item => ({ id: item.id, title: item.title, hasPhoto: images.has(item.id),
+          postDate: getOwnedEntryPostDate(item), collectionId: item.collection_id, collectionName: requireCollection(item.collection_id).name }));
       const name = matches.map(collection => collection.name).sort((a, b) => a.length - b.length || a.localeCompare(b))[0]!;
       return { topic: { key, name }, entries: entries.slice(page * 24, (page + 1) * 24), total: entries.length, hasMore: (page + 1) * 24 < entries.length };
     },
@@ -283,7 +288,8 @@ export function createDemoRepository(options: { empty?: boolean } = {}): Collect
     },
     async readImages(ids) { return ids.flatMap(id => { const image = images.get(id); return image ? [{ ...image }] : []; }); },
     async uploadPhoto(itemId, photo) {
-      requireItem(itemId);
+      const item = requireItem(itemId);
+      item.posted_at ??= new Date().toISOString();
       images.set(itemId, { itemId, url: `data:image/jpeg;base64,${photo.imageBase64}`, thumbnailUrl: `data:image/jpeg;base64,${photo.thumbnailBase64}`, expiresAt: '2099-01-01T00:00:00Z' });
     },
     async deleteItem(id) { items = items.filter(item => item.id !== id); images.delete(id); },

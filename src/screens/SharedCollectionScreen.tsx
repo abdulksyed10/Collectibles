@@ -12,7 +12,7 @@ import { useGalleryLayout } from '../components/useGalleryLayout';
 import { EntryViewer } from '../components/EntryViewer';
 import { useEntryNavigation } from '../components/useEntryNavigation';
 import { useSubtleScrollbar } from '../components/scrollbars';
-import { formatEntryPostDate } from '../domain/postDates';
+import { PublicEntryMeta } from '../social/PublicEntryMeta';
 
 type SharedItem = SharedCollectionPage['items'][number];
 type Photo = { full: string; thumb: string };
@@ -29,7 +29,6 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
   const [total, setTotal] = useState(0);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<SharedItem | null>(null);
-  const selectedNavigation = useEntryNavigation(items, selected?.id, setSelected);
   const [failedPhotos, setFailedPhotos] = useState<Set<string>>(new Set());
   const [revision, setRevision] = useState(0);
   const [revalidating, setRevalidating] = useState(false);
@@ -147,6 +146,7 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
   }
 
   function photoFailed(id: string) { setFailedPhotos(current => new Set(current).add(id)); }
+  const selectedNavigation = useEntryNavigation(items, selected?.id, setSelected, { hasMore, loadMore, busy: loading || moreLoading || revalidating });
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, justifyContent: 'space-between', borderBottomWidth: 1, borderColor: colors.line, backgroundColor: colors.card }]}>
       <Button title="Back" icon={ArrowLeft} secondary onPress={onBack} /><Brand small />
@@ -174,8 +174,8 @@ export function SharedCollectionScreen({ collectionId, repository, onBack, demo 
       ListEmptyComponent={loading ? <ActivityIndicator color={colors.green} style={{ margin: 32 }} /> : collection && !error ? <Text style={[ui.muted, { padding: 8 }]}>No items.</Text> : null}
       ListFooterComponent={hasMore && collection ? <Button title="Load more items" secondary onPress={() => { void loadMore(); }} loading={moreLoading} disabled={revalidating} style={{ margin: 8 }} /> : null}
     />
-    {selected ? <EntryViewer title={selected.title} onClose={() => setSelected(null)} navigation={selectedNavigation} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}>
-      {selected.postDate ? <Text style={[ui.muted, { fontSize: 12 }]}>{formatEntryPostDate(selected.postDate)}</Text> : null}
+    {selected ? <EntryViewer entryId={selected.id} title={selected.title} onClose={() => setSelected(null)} navigation={selectedNavigation} media={style => photos[selected.id] && !failedPhotos.has(selected.id) ? <Image source={{ uri: photos[selected.id]!.full }} cachePolicy="none" style={style} contentFit="contain" accessibilityLabel={selected.title} onError={() => photoFailed(selected.id)} /> : <Text style={ui.muted}>{selected.hasPhoto ? 'Photo unavailable' : 'No photo'}</Text>}>
+      <PublicEntryMeta key={selected.id} entry={selected} onChange={patch => { setSelected(current => current?.id === selected.id ? { ...current, ...patch } : current); setItems(current => current.map(entry => entry.id === selected.id ? { ...entry, ...patch } : entry)); }} />
       <PublicSafetyControls repository={repository} collectionId={collectionId} itemId={selected.id} itemLabel="this entry" demo={demo} onBlocked={() => { setSelected(null); onBack(); }} />
     </EntryViewer> : null}
   </SafeAreaView>;

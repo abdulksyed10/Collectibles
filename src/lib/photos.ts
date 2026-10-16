@@ -7,14 +7,14 @@ import { appendPhotoAssets, type SelectedPhotoAsset } from '../domain/photoSelec
 export type PickedPhotoAsset = ImagePicker.ImagePickerAsset & SelectedPhotoAsset;
 
 export async function selectPhotoAssets({ camera = false, remaining }: { camera?: boolean; remaining: number }): Promise<PickedPhotoAsset[]> {
-  if (!Number.isInteger(remaining) || remaining < 1) throw new Error('You can add up to 10 images at a time.');
+  if (!Number.isInteger(remaining) || remaining < 1 || remaining > 10) throw new Error('You can add up to 10 images at a time.');
   if (camera) {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) throw new Error('Allow camera access in your device settings to take a photo.');
   }
   const options: ImagePicker.ImagePickerOptions = {
     mediaTypes: ['images'], allowsEditing: false, quality: 1, exif: false,
-    ...(!camera ? { allowsMultipleSelection: true, selectionLimit: remaining } : {}),
+    ...(!camera ? { allowsMultipleSelection: remaining > 1, selectionLimit: remaining } : {}),
   };
   let result: ImagePicker.ImagePickerResult;
   try {
@@ -26,12 +26,13 @@ export async function selectPhotoAssets({ camera = false, remaining }: { camera?
   }
   const assets = result.assets ?? [];
   if (result.canceled || !assets.length) return [];
-  if (assets.length > remaining) throw new Error('You can add up to 10 images at a time.');
+  if (assets.length > remaining) throw new Error(`Choose up to ${remaining} more ${remaining === 1 ? 'image' : 'images'}. You can add 10 images in total.`);
   for (const asset of assets) assertImageAsset(asset);
   return appendPhotoAssets([], assets as PickedPhotoAsset[]);
 }
 
 export async function preparePhoto(asset: PickedPhotoAsset): Promise<PreparedPhoto> {
+  assertImageAsset(asset);
   const resize = asset.width > asset.height ? { width: Math.min(asset.width, 1600) } : { height: Math.min(asset.height, 1600) };
   let image: Awaited<ReturnType<typeof manipulateAsync>>;
   let thumb: Awaited<ReturnType<typeof manipulateAsync>>;

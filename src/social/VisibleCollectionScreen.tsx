@@ -80,8 +80,8 @@ export function VisibleCollectionScreen({ collectionId, onClose, onSignIn }: { c
     setOwner(current => current?.publisherId === publisherId ? { ...current, relationship } : current);
   }
   const entries = data?.entries.items ?? [];
-  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected);
   const cursor = data?.entries.nextCursor ?? null;
+  const selectedNavigation = useEntryNavigation(entries, selected?.id, setSelected, { hasMore: Boolean(data?.entries.nextCursor), loadMore, busy: loading || moreLoading });
   return <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayout}>
     <View style={[ui.row, { padding: 16, borderBottomWidth: 1, borderColor: colors.line }]}><Button title="Back" icon={ArrowLeft} secondary onPress={onClose} /></View>
     <FlatList {...scrollbar} key={layout.columns} data={entries} keyExtractor={entry => entry.id} numColumns={layout.columns} style={scrollbar.style} columnWrapperStyle={layout.columns > 1 ? { gap: layout.gap } : undefined} contentContainerStyle={{ paddingHorizontal: layout.padding, paddingTop: layout.padding, paddingBottom: 32, flexGrow: 1 }} refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.green} />}
